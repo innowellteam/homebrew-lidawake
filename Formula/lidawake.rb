@@ -2,7 +2,7 @@ class Lidawake < Formula
   desc "Menu bar toggle that keeps your Mac awake with the lid closed"
   homepage "https://github.com/sheldon-innowell/lidawake"
   # The repo is private, so fetch with git (and your GitHub login) rather than a release tarball.
-  url "https://github.com/sheldon-innowell/lidawake.git", tag: "v1.0.0"
+  url "https://github.com/sheldon-innowell/lidawake.git", tag: "v1.0.0", revision: "4e427dcf457c8fb78f0da50451f7c010b93639f7"
   license "MIT"
   head "https://github.com/sheldon-innowell/lidawake.git", branch: "main"
 
