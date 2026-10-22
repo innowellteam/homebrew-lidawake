@@ -11,11 +11,14 @@ Left-click the icon to toggle. Right-click (or control-click) for the menu.
 
 ```sh
 brew tap sheldon-innowell/lidawake https://github.com/sheldon-innowell/lidawake.git
-brew install lidawake
+brew trust sheldon-innowell/lidawake
+HOMEBREW_GITHUB_API_TOKEN=$(gh auth token) brew install lidawake
 brew services start lidawake   # start now and at every login
 ```
 
-The repo is private, so brew fetches it with git using your GitHub login. You need access to the repo and git set up to use `gh` for GitHub (`gh auth setup-git`). It builds from source, so it also needs the Xcode Command Line Tools (`xcode-select --install`).
+The repo is private, so brew fetches it with git using your GitHub login. You need access to the repo and git set up to use `gh` for GitHub (`gh auth setup-git`). Homebrew downloads source inside a sandbox where `gh` can't read its token from the keychain, so pass it on the command line as above. Do the same for `brew upgrade lidawake`. Don't export it from your shell profile; the `gh` token has far broader access than brew needs.
+
+It builds from source, so it also needs the Xcode Command Line Tools (`xcode-select --install`).
 
 ## How it gets root
 
@@ -50,11 +53,11 @@ make                          # builds build/LidAwake.app
 open build/LidAwake.app
 ```
 
-To try whatever is on `main` through brew: `brew reinstall --HEAD lidawake`.
+To try whatever is on `main` through brew: `HOMEBREW_GITHUB_API_TOKEN=$(gh auth token) brew reinstall --HEAD lidawake`.
 
 ## Release a new version
 
 1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, commit.
 2. `git tag vX.Y.Z && git push origin main vX.Y.Z`
 3. In `Formula/lidawake.rb`, set `tag:` to `vX.Y.Z` and `revision:` to the output of `git rev-parse vX.Y.Z^{}`. Commit and push.
-4. `brew update && brew upgrade lidawake && brew services restart lidawake`
+4. `brew update && HOMEBREW_GITHUB_API_TOKEN=$(gh auth token) brew upgrade lidawake && brew services restart lidawake`
