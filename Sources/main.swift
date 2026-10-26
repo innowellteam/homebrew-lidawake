@@ -4,6 +4,11 @@ import AppKit
 // toggles can run `sudo -n pmset ...` without asking. It allows exactly two commands.
 let sudoersPath = "/etc/sudoers.d/lidawake"
 
+// Heat alerts are posted here. A random ntfy.sh topic is generated on first launch; point it at
+// your own server with `defaults write org.innowell.lidawake NtfyURL <url>`.
+let ntfyURLKey = "NtfyURL"
+let sleepWhenCriticalKey = "SleepWhenCritical"
+
 @discardableResult
 func run(_ path: String, _ args: [String]) -> (status: Int32, output: String) {
     let process = Process()
@@ -42,12 +47,17 @@ func runAsAdmin(_ command: String, prompt: String) {
     alert.runModal()
 }
 
+// Toggles through the sudo rule. Returns false, without prompting, if the rule isn't installed.
+func trySetSleepDisabled(_ disabled: Bool) -> Bool {
+    run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-a", "disablesleep", disabled ? "1" : "0"]).status == 0
+}
+
 func setSleepDisabled(_ disabled: Bool) {
-    let value = disabled ? "1" : "0"
-    if run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-a", "disablesleep", value]).status == 0 { return }
+    if trySetSleepDisabled(disabled) { return }
 
     // No rule yet. Write it as root straight into /etc/sudoers.d (sudo skips names containing
     // a dot, so the .tmp file is inert), validate it, move it into place, then toggle.
+    let value = disabled ? "1" : "0"
     let rule = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1"
     let tmp = sudoersPath + ".tmp"
     let command = [
@@ -60,21 +70,67 @@ func setSleepDisabled(_ disabled: Bool) {
     runAsAdmin(command, prompt: "LidAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
 }
 
+struct PhoneAlertError: Error, CustomStringConvertible {
+    let description: String
+}
+
+// Priority and tags are ntfy's: 3 default, 4 high, 5 urgent; tags are emoji shortcodes.
+func sendPhoneAlert(title: String, message: String, priority: Int, tag: String) async throws {
+    var request = URLRequest(url: URL(string: UserDefaults.standard.string(forKey: ntfyURLKey)!)!, timeoutInterval: 15)
+    request.httpMethod = "POST"
+    request.httpBody = Data(message.utf8)
+    request.setValue(title, forHTTPHeaderField: "Title")
+    request.setValue(String(priority), forHTTPHeaderField: "Priority")
+    request.setValue(tag, forHTTPHeaderField: "Tags")
+    let (_, response) = try await URLSession.shared.data(for: request)
+    let status = (response as! HTTPURLResponse).statusCode
+    guard status == 200 else { throw PhoneAlertError(description: "ntfy returned HTTP \(status)") }
+}
+
+extension ProcessInfo.ThermalState {
+    var label: String {
+        switch self {
+        case .nominal: "Normal"
+        case .fair: "Warm"
+        case .serious: "Hot"
+        case .critical: "Critical"
+        @unknown default: "Unknown"
+        }
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     let menu = NSMenu()
     let toggleItem = NSMenuItem(title: "Stay Awake With Lid Closed", action: #selector(toggle), keyEquivalent: "")
+    let heatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let sleepWhenCriticalItem = NSMenuItem(title: "Let Mac Sleep If Critically Hot", action: #selector(toggleSleepWhenCritical), keyEquivalent: "")
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
+    // Highest heat level we've alerted about since the Mac was last back below "Hot".
+    var alertedState = ProcessInfo.ThermalState.nominal
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true])
+        if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
+            let topic = "lidawake-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20)
+            UserDefaults.standard.set("https://ntfy.sh/\(topic)", forKey: ntfyURLKey)
+        }
+
         toggleItem.target = self
+        sleepWhenCriticalItem.target = self
         removeRuleItem.target = self
-        menu.addItem(toggleItem)
-        menu.addItem(.separator())
-        menu.addItem(removeRuleItem)
+        let phoneAlertsItem = NSMenuItem(title: "Phone Alerts…", action: #selector(showPhoneAlerts), keyEquivalent: "")
+        phoneAlertsItem.target = self
         let aboutItem = NSMenuItem(title: "About LidAwake", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
+        menu.addItem(toggleItem)
+        menu.addItem(.separator())
+        menu.addItem(heatItem)
+        menu.addItem(sleepWhenCriticalItem)
+        menu.addItem(phoneAlertsItem)
+        menu.addItem(.separator())
+        menu.addItem(removeRuleItem)
         menu.addItem(aboutItem)
         menu.addItem(NSMenuItem(title: "Quit LidAwake", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         menu.delegate = self
@@ -84,10 +140,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.action = #selector(clicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
-        refresh()
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { self.checkHeat() }
+        }
+        checkHeat()
         // Pick up changes made outside the app, e.g. pmset run in a terminal.
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
-            MainActor.assumeIsolated { self.refresh() }
+            MainActor.assumeIsolated { self.checkHeat() }
         }
     }
 
@@ -110,6 +169,90 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func toggle() {
         setSleepDisabled(!sleepDisabled())
         refresh()
+    }
+
+    @objc func toggleSleepWhenCritical() {
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: sleepWhenCriticalKey), forKey: sleepWhenCriticalKey)
+        refresh()
+    }
+
+    // Alerts only go out while sleep is disabled: that's when the Mac might be shut in a bag.
+    func checkHeat() {
+        refresh()
+        let state = ProcessInfo.processInfo.thermalState
+        if state.rawValue < ProcessInfo.ThermalState.serious.rawValue {
+            if alertedState != .nominal {
+                alertedState = .nominal
+                Task { await notifyPhone(title: "Your Mac has cooled down", message: "Heat is back to \(state.label.lowercased()).", priority: 3, tag: "white_check_mark") }
+            }
+            return
+        }
+        guard state.rawValue > alertedState.rawValue, sleepDisabled() else { return }
+        alertedState = state
+
+        guard state == .critical else {
+            Task { await notifyPhone(title: "Your Mac is running hot", message: "macOS is slowing it down to cool off. If it's in a bag, give it some air.", priority: 4, tag: "thermometer") }
+            return
+        }
+        guard UserDefaults.standard.bool(forKey: sleepWhenCriticalKey) else {
+            Task { await notifyPhone(title: "Your Mac is critically hot", message: "Sleep is still disabled. macOS will shut it down if it gets any hotter.", priority: 5, tag: "fire") }
+            return
+        }
+        Task {
+            // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
+            await notifyPhone(title: "Your Mac is critically hot", message: "LidAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
+            if !trySetSleepDisabled(false) {
+                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sudo rule isn't installed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
+            }
+            refresh()
+        }
+    }
+
+    // Nobody is at the Mac to see an error for a background alert, so failures are only logged.
+    func notifyPhone(title: String, message: String, priority: Int, tag: String) async {
+        do {
+            try await sendPhoneAlert(title: title, message: message, priority: priority, tag: tag)
+        } catch {
+            NSLog("LidAwake: phone alert failed: \(error)")
+        }
+    }
+
+    @objc func showPhoneAlerts() {
+        let url = URL(string: UserDefaults.standard.string(forKey: ntfyURLKey)!)!
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Heat alerts on your phone"
+        alert.informativeText = """
+            Install the ntfy app, tap +, and subscribe to this topic:
+
+            \(url.lastPathComponent)
+
+            Server: \(url.host!)
+
+            While LidAwake is keeping your Mac awake, it alerts you when the Mac runs hot.
+            """
+        alert.addButton(withTitle: "Copy Topic")
+        alert.addButton(withTitle: "Send Test Alert")
+        alert.addButton(withTitle: "Done")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.lastPathComponent, forType: .string)
+        case .alertSecondButtonReturn:
+            Task {
+                do {
+                    try await sendPhoneAlert(title: "LidAwake test", message: "Phone alerts are working.", priority: 3, tag: "white_check_mark")
+                } catch {
+                    NSApp.activate(ignoringOtherApps: true)
+                    let failed = NSAlert()
+                    failed.messageText = "Couldn't send the test alert"
+                    failed.informativeText = "\(error)"
+                    failed.runModal()
+                }
+            }
+        default:
+            break
+        }
     }
 
     @objc func removeRule() {
@@ -142,6 +285,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ? "Staying awake with the lid closed. Click to allow sleep."
             : "Sleeping normally. Click to stay awake with the lid closed."
         toggleItem.state = awake ? .on : .off
+        heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"
+        sleepWhenCriticalItem.state = UserDefaults.standard.bool(forKey: sleepWhenCriticalKey) ? .on : .off
         removeRuleItem.isHidden = !FileManager.default.fileExists(atPath: sudoersPath)
     }
 }

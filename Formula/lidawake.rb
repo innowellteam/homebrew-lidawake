@@ -1,10 +1,11 @@
 class Lidawake < Formula
   desc "Menu bar toggle that keeps your Mac awake with the lid closed"
-  homepage "https://github.com/sheldon-innowell/lidawake"
-  # The repo is private, so fetch with git (and your GitHub login) rather than a release tarball.
-  url "https://github.com/sheldon-innowell/lidawake.git", tag: "v1.0.0", revision: "4e427dcf457c8fb78f0da50451f7c010b93639f7"
+  homepage "https://github.com/innowellteam/homebrew-lidawake"
+  # The repo is internal, and Homebrew downloads source in a sandbox that can't use your GitHub
+  # login. This repo is also the tap, so brew already has a clone of it: build from that.
+  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.1.0"
   license "MIT"
-  head "https://github.com/sheldon-innowell/lidawake.git", branch: "main"
+  head "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, branch: "main"
 
   depends_on :macos
 
@@ -22,6 +23,9 @@ class Lidawake < Formula
       Left-click the menu bar icon to toggle, right-click for the menu.
       The first toggle asks for your password once, to install
       /etc/sudoers.d/lidawake (it only allows pmset disablesleep 0/1).
+
+      For heat alerts on your phone, install the ntfy app and choose
+      "Phone Alerts..." from the menu.
 
       Before uninstalling, turn lid sleep back on and remove the rule:
         sudo pmset -a disablesleep 0

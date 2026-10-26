@@ -7,18 +7,44 @@ A tiny macOS menu bar app that toggles `pmset -a disablesleep`, so your Mac keep
 
 Left-click the icon to toggle. Right-click (or control-click) for the menu.
 
+While it's keeping your Mac awake, it also watches the Mac's heat and alerts your phone if it runs hot (see [Heat alerts](#heat-alerts)).
+
 ## Install
 
 ```sh
-brew tap sheldon-innowell/lidawake https://github.com/sheldon-innowell/lidawake.git
-brew trust sheldon-innowell/lidawake
-HOMEBREW_GITHUB_API_TOKEN=$(gh auth token) brew install lidawake
+brew install innowellteam/lidawake/lidawake
 brew services start lidawake   # start now and at every login
 ```
 
-The repo is private, so brew fetches it with git using your GitHub login. You need access to the repo and git set up to use `gh` for GitHub (`gh auth setup-git`). Homebrew downloads source inside a sandbox where `gh` can't read its token from the keychain, so pass it on the command line as above. Do the same for `brew upgrade lidawake`. Don't export it from your shell profile; the `gh` token has far broader access than brew needs.
+The repo is internal to the Innowell GitHub, so brew clones it with your GitHub login. If the install can't read the repo, run `gh auth login` and then `gh auth setup-git` so git can use that login. It builds from source, so it also needs the Xcode Command Line Tools (`xcode-select --install`).
 
-It builds from source, so it also needs the Xcode Command Line Tools (`xcode-select --install`).
+Upgrading is the usual `brew update && brew upgrade lidawake`, then `brew services restart lidawake`.
+
+## Recommended usage
+
+1. Connect to your phone's hotspot.
+2. Enable `/remote-control` in Claude Code.
+3. Start your long-running prompt.
+4. Close your laptop and toss it in your bag.
+5. Go to the pub.
+6. Check your phone each time you go to the bathroom.
+
+## Heat alerts
+
+While sleep is disabled, LidAwake watches macOS's thermal pressure (the heat level macOS itself uses to decide when to slow the Mac down) and sends alerts to your phone through [ntfy](https://ntfy.sh):
+
+- Hot: a high-priority alert suggesting you give it some air.
+- Critical: an urgent alert. With "Let Mac Sleep If Critically Hot" ticked in the menu (the default), LidAwake then turns sleep back on, so a closed Mac goes to sleep and cools down. Untick it to only get the alert.
+- Back to normal: an all-clear.
+
+To set it up, install the ntfy app on your phone, choose "Phone Alerts…" from the menu, copy the topic, subscribe to it in the app, then hit "Send Test Alert".
+
+Things worth knowing:
+
+- The topic is random and created on first launch. Anyone who knows it can read your alerts, so keep it to yourself.
+- Alerts go through ntfy.sh's public servers. To use your own ntfy server, run `defaults write org.innowell.lidawake NtfyURL https://ntfy.example.com/<topic>` and restart LidAwake.
+- macOS reports heat as a level (normal, warm, hot, critical), not a temperature, so the menu shows the level rather than a °C figure.
+- Alerts need a network connection, so a phone hotspot works fine.
 
 ## How it gets root
 
@@ -32,7 +58,7 @@ The rule is written and validated with `visudo` as root, and only allows those t
 
 ## Things to know
 
-- With sleep disabled the Mac never sleeps, including idle sleep and Apple menu > Sleep. Don't put it in a bag like that.
+- With sleep disabled the Mac never sleeps, including idle sleep and Apple menu > Sleep. Before it goes in a bag, set up [heat alerts](#heat-alerts).
 - The setting is system-wide and outlives the app. Quitting LidAwake doesn't change it, and the icon always reflects the real state (it re-checks every 15 seconds, so changes made in a terminal show up too).
 
 ## Uninstall
@@ -42,7 +68,7 @@ sudo pmset -a disablesleep 0
 sudo rm /etc/sudoers.d/lidawake
 brew services stop lidawake
 brew uninstall lidawake
-brew untap sheldon-innowell/lidawake
+brew untap innowellteam/lidawake
 ```
 
 ## Build locally
@@ -53,11 +79,11 @@ make                          # builds build/LidAwake.app
 open build/LidAwake.app
 ```
 
-To try whatever is on `main` through brew: `HOMEBREW_GITHUB_API_TOKEN=$(gh auth token) brew reinstall --HEAD lidawake`.
+To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD lidawake`.
 
 ## Release a new version
 
 1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, commit.
 2. `git tag vX.Y.Z && git push origin main vX.Y.Z`
 3. In `Formula/lidawake.rb`, set `tag:` to `vX.Y.Z` and `revision:` to the output of `git rev-parse vX.Y.Z^{}`. Commit and push.
-4. `brew update && HOMEBREW_GITHUB_API_TOKEN=$(gh auth token) brew upgrade lidawake && brew services restart lidawake`
+4. `brew update && brew upgrade lidawake && brew services restart lidawake`
