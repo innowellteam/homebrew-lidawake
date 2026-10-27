@@ -3,7 +3,7 @@ class Lidawake < Formula
   homepage "https://github.com/innowellteam/homebrew-lidawake"
   # The repo is internal, and Homebrew downloads source in a sandbox that can't use your GitHub
   # login. This repo is also the tap, so brew already has a clone of it: build from that.
-  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.1.0", revision: "b4c19751fbe794b0b5bf01b9d50dd4750c5777ae"
+  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.1.1", revision: "73330c81a5933e6c49dc3cd23321eff2e8403c12"
   license "MIT"
   head "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, branch: "main"
 
