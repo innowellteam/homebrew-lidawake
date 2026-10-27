@@ -23,13 +23,15 @@ func run(_ path: String, _ args: [String]) -> (status: Int32, output: String) {
     return (process.terminationStatus, String(decoding: data, as: UTF8.self))
 }
 
-// `pmset -g` prints " SleepDisabled\t\t1" under "System-wide power settings".
+// `pmset -g` prints " SleepDisabled\t\t1" under "System-wide power settings", but only once
+// disablesleep has been set on this Mac. A Mac that has never been toggled has no such line, and
+// its sleep isn't disabled.
 func sleepDisabled() -> Bool {
     let fields = run("/usr/bin/pmset", ["-g"]).output
         .split(separator: "\n")
         .map { $0.split(whereSeparator: \.isWhitespace) }
-        .first { $0.first == "SleepDisabled" }!
-    return fields.last == "1"
+        .first { $0.first == "SleepDisabled" }
+    return fields?.last == "1"
 }
 
 func runAsAdmin(_ command: String, prompt: String) {
