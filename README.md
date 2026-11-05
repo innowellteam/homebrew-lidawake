@@ -16,7 +16,7 @@ brew install innowellteam/lidawake/lidawake
 brew services start lidawake   # start now and at every login
 ```
 
-The repo is internal to the Innowell GitHub, so brew clones it with your GitHub login. If the install can't read the repo, run `gh auth login` and then `gh auth setup-git` so git can use that login. It builds from source, so it also needs the Xcode Command Line Tools (`xcode-select --install`).
+The repo is internal to the Innowell GitHub, so brew clones it with your GitHub login. If the install can't read the repo, run `gh auth login` and then `gh auth setup-git` so git can use that login. Brew installs a prebuilt app that runs on Apple Silicon and Intel, so there's nothing to compile.
 
 Upgrading is the usual `brew update && brew upgrade lidawake`, then `brew services restart lidawake`.
 
@@ -73,6 +73,8 @@ brew untap innowellteam/lidawake
 
 ## Build locally
 
+Building needs the Xcode Command Line Tools (`xcode-select --install`).
+
 ```sh
 brew services stop lidawake   # so you don't get two icons
 make                          # builds build/LidAwake.app
@@ -83,7 +85,10 @@ To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD
 
 ## Release a new version
 
-1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, commit.
-2. `git tag vX.Y.Z && git push origin main vX.Y.Z`
-3. In `Formula/lidawake.rb`, set `tag:` to `vX.Y.Z` and `revision:` to the output of `git rev-parse vX.Y.Z^{}`. Commit and push.
-4. `brew update && brew upgrade lidawake && brew services restart lidawake`
+1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, commit, then `git tag vX.Y.Z`.
+2. `make clean bottle` builds the app and replaces `bottles/` with the new prebuilt bottle, printing its sha256.
+3. In `Formula/lidawake.rb`, set `tag:` to `vX.Y.Z`, `revision:` to the output of `git rev-parse vX.Y.Z^{}`, and the bottle `sha256` to the one `make` printed.
+4. Commit the formula and `bottles/`, then `git push origin main vX.Y.Z`.
+5. `brew update && brew upgrade lidawake && brew services restart lidawake`
+
+Brew reads the bottle from its own clone of this repo, the same way it reads the source, so neither needs a GitHub token.
