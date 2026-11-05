@@ -7,7 +7,7 @@ A tiny macOS menu bar app that toggles `pmset -a disablesleep`, so your Mac keep
 
 Left-click the icon to toggle. Right-click (or control-click) for the menu.
 
-While it's keeping your Mac awake, it also watches the Mac's heat and alerts your phone if it runs hot (see [Heat alerts](#heat-alerts)).
+While it's keeping your Mac awake, it also watches the Mac's heat and battery and alerts your phone if it runs hot or low (see [Phone alerts](#phone-alerts)).
 
 ## Install
 
@@ -29,13 +29,23 @@ LidAwake keeps itself up to date. Once a day it runs `brew update` and `brew upg
 5. Go to the pub.
 6. Check your phone each time you go to the bathroom.
 
-## Heat alerts
+## Phone alerts
 
-While sleep is disabled, LidAwake watches macOS's thermal pressure (the heat level macOS itself uses to decide when to slow the Mac down) and sends alerts to your phone through [ntfy](https://ntfy.sh):
+While sleep is disabled, LidAwake sends alerts to your phone through [ntfy](https://ntfy.sh).
+
+Heat, from macOS's thermal pressure (the heat level macOS itself uses to decide when to slow the Mac down):
 
 - Hot: a high-priority alert suggesting you give it some air.
 - Critical: an urgent alert. With "Let Mac Sleep If Critically Hot" ticked in the menu (the default), LidAwake then turns sleep back on, so a closed Mac goes to sleep and cools down. Untick it to only get the alert.
 - Back to normal: an all-clear.
+
+Battery, while the Mac is running on it:
+
+- 25%: a normal alert.
+- 10%: a high-priority alert.
+- 5% and 2%: urgent alerts.
+
+Each level alerts once, and plugging in resets them. If the battery is already below a level when sleep gets disabled or the charger comes out, you get one alert for the lowest level it's under, with the real percentage.
 
 To set it up, install the ntfy app on your phone, choose "Phone Alerts…" from the menu, copy the topic, subscribe to it in the app, then hit "Send Test Alert".
 
@@ -58,7 +68,7 @@ The rule is written and validated with `visudo` as root, and only allows those t
 
 ## Things to know
 
-- With sleep disabled the Mac never sleeps, including idle sleep and Apple menu > Sleep. Before it goes in a bag, set up [heat alerts](#heat-alerts).
+- With sleep disabled the Mac never sleeps, including idle sleep and Apple menu > Sleep. Before it goes in a bag, set up [phone alerts](#phone-alerts).
 - The setting is system-wide and outlives the app. Quitting LidAwake doesn't change it, and the icon always reflects the real state (it re-checks every 15 seconds, so changes made in a terminal show up too).
 
 ## Uninstall

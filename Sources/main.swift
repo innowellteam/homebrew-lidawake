@@ -1,4 +1,5 @@
 import AppKit
+import IOKit.ps
 
 // pmset needs root. On first toggle we install this rule (one admin prompt) so later
 // toggles can run `sudo -n pmset ...` without asking. It allows exactly two commands.
@@ -110,6 +111,25 @@ func upgradeThroughBrew(_ prefix: String) -> Bool {
     return true
 }
 
+// The battery's charge in percent while the Mac is running on it; nil on power, or with no battery.
+func batteryPercentOnBattery() -> Int? {
+    let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
+    let sources = IOPSCopyPowerSourcesList(info).takeRetainedValue() as [CFTypeRef]
+    let battery = sources
+        .map { IOPSGetPowerSourceDescription(info, $0).takeUnretainedValue() as! [String: Any] }
+        .first { $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType }
+    guard let battery, battery[kIOPSPowerSourceStateKey] as! String == kIOPSBatteryPowerValue else { return nil }
+    return (battery[kIOPSCurrentCapacityKey] as! Int) * 100 / (battery[kIOPSMaxCapacityKey] as! Int)
+}
+
+// Sent as the battery runs down past each level: level, ntfy priority, message.
+let batteryWarnings: [(level: Int, priority: Int, message: String)] = [
+    (25, 3, "It's on battery and LidAwake is keeping it awake. Plug it in when you can."),
+    (10, 4, "Plug it in soon."),
+    (5, 5, "Plug it in now. It's nearly flat."),
+    (2, 5, "It's about to run out, and anything running on it will stop."),
+]
+
 extension ProcessInfo.ThermalState {
     var label: String {
         switch self {
@@ -132,6 +152,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
     // Highest heat level we've alerted about since the Mac was last back below "Hot".
     var alertedState = ProcessInfo.ThermalState.nominal
+    // Lowest battery level we've warned about since the Mac was last on power.
+    var warnedBatteryLevel = Int.max
     var checkingForUpdate = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -168,9 +190,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self.checkHeat() }
         }
         checkHeat()
-        // Pick up changes made outside the app, e.g. pmset run in a terminal.
+        checkBattery()
+        // Pick up changes made outside the app, e.g. pmset run in a terminal, and the battery level.
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
-            MainActor.assumeIsolated { self.checkHeat() }
+            MainActor.assumeIsolated {
+                self.checkHeat()
+                self.checkBattery()
+            }
         }
         // A minute after launch, so the network is up after a login, then hourly.
         RunLoop.main.add(Timer(fire: Date().addingTimeInterval(60), interval: 60 * 60, repeats: true) { _ in
@@ -260,6 +286,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // Like heat alerts, battery warnings only go out while sleep is disabled.
+    func checkBattery() {
+        guard let percent = batteryPercentOnBattery() else {
+            warnedBatteryLevel = .max
+            return
+        }
+        guard let warning = batteryWarnings.last(where: { percent <= $0.level }),
+              warning.level < warnedBatteryLevel, sleepDisabled() else { return }
+        warnedBatteryLevel = warning.level
+        Task { await notifyPhone(title: "Your Mac's battery is at \(percent)%", message: warning.message, priority: warning.priority, tag: "battery") }
+    }
+
     // Nobody is at the Mac to see an error for a background alert, so failures are only logged.
     func notifyPhone(title: String, message: String, priority: Int, tag: String) async {
         do {
@@ -273,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let url = URL(string: UserDefaults.standard.string(forKey: ntfyURLKey)!)!
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Heat alerts on your phone"
+        alert.messageText = "Phone alerts"
         alert.informativeText = """
             Install the ntfy app, tap +, and subscribe to this topic:
 
@@ -281,7 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             Server: \(url.host!)
 
-            While LidAwake is keeping your Mac awake, it alerts you when the Mac runs hot.
+            While LidAwake is keeping your Mac awake, it alerts you when the Mac runs hot or its battery runs low.
             """
         alert.addButton(withTitle: "Copy Topic")
         alert.addButton(withTitle: "Send Test Alert")
