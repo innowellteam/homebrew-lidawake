@@ -9,6 +9,14 @@ let sudoersPath = "/etc/sudoers.d/lidawake"
 let ntfyURLKey = "NtfyURL"
 let sleepWhenCriticalKey = "SleepWhenCritical"
 
+// LidAwake keeps itself up to date through brew. Brew installs it at
+// <prefix>/Cellar/lidawake/<version>/LidAwake.app; a local build lives elsewhere and never updates.
+let brewPrefix: String? = {
+    let path = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+    return path.range(of: "/Cellar/lidawake/").map { String(path[..<$0.lowerBound]) }
+}()
+let lastUpdateCheckKey = "LastUpdateCheck"
+
 @discardableResult
 func run(_ path: String, _ args: [String]) -> (status: Int32, output: String) {
     let process = Process()
@@ -89,6 +97,19 @@ func sendPhoneAlert(title: String, message: String, priority: Int, tag: String) 
     guard status == 200 else { throw PhoneAlertError(description: "ntfy returned HTTP \(status)") }
 }
 
+// Runs `brew update`, then upgrades LidAwake if there's a new version. False if brew failed.
+func upgradeThroughBrew(_ prefix: String) -> Bool {
+    let brew = "\(prefix)/bin/brew"
+    for args in [[brew, "update", "--quiet"], ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "upgrade", "innowellteam/lidawake/lidawake"]] {
+        let result = run("/usr/bin/env", args)
+        guard result.status == 0 else {
+            NSLog("LidAwake: \(args.joined(separator: " ")) failed: \(result.output)")
+            return false
+        }
+    }
+    return true
+}
+
 extension ProcessInfo.ThermalState {
     var label: String {
         switch self {
@@ -111,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
     // Highest heat level we've alerted about since the Mac was last back below "Hot".
     var alertedState = ProcessInfo.ThermalState.nominal
+    var checkingForUpdate = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true])
@@ -150,6 +172,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
             MainActor.assumeIsolated { self.checkHeat() }
         }
+        // A minute after launch, so the network is up after a login, then hourly.
+        RunLoop.main.add(Timer(fire: Date().addingTimeInterval(60), interval: 60 * 60, repeats: true) { _ in
+            MainActor.assumeIsolated { self.checkForUpdate() }
+        }, forMode: .common)
+    }
+
+    // At most once a day. A failed check (say, while offline) is retried on the next hourly tick.
+    func checkForUpdate() {
+        let lastCheck = UserDefaults.standard.object(forKey: lastUpdateCheckKey) as? Date ?? .distantPast
+        guard let prefix = brewPrefix, !checkingForUpdate, Date().timeIntervalSince(lastCheck) > 24 * 60 * 60 else { return }
+        checkingForUpdate = true
+        Task.detached {
+            let succeeded = upgradeThroughBrew(prefix)
+            await MainActor.run { self.finishUpdateCheck(prefix, succeeded: succeeded) }
+        }
+    }
+
+    func finishUpdateCheck(_ prefix: String, succeeded: Bool) {
+        checkingForUpdate = false
+        guard succeeded else { return }
+        UserDefaults.standard.set(Date(), forKey: lastUpdateCheckKey)
+        let installed = NSDictionary(contentsOfFile: "\(prefix)/opt/lidawake/LidAwake.app/Contents/Info.plist")!
+        guard installed["CFBundleVersion"] as! String != Bundle.main.infoDictionary!["CFBundleVersion"] as! String else { return }
+        // Under brew services, launchd gives our job's label (e.g. sh.brew.lidawake) in XPC_SERVICE_NAME,
+        // and restarting the job starts the new version. Opened any other way, the label is
+        // "application.org.innowell.lidawake.<ids>", and the new version waits for the next launch.
+        guard let label = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"], label.hasSuffix(".lidawake") else { return }
+        run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(label)"])
     }
 
     // Left click toggles; right click (or control-click) opens the menu.

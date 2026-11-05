@@ -18,7 +18,7 @@ brew services start lidawake   # start now and at every login
 
 The repo is internal to the Innowell GitHub, so brew clones it with your GitHub login. If the install can't read the repo, run `gh auth login` and then `gh auth setup-git` so git can use that login. Brew installs a prebuilt app that runs on Apple Silicon and Intel, so there's nothing to compile.
 
-Upgrading is the usual `brew update && brew upgrade lidawake`, then `brew services restart lidawake`.
+LidAwake keeps itself up to date. Once a day it runs `brew update` and `brew upgrade lidawake`, then restarts into the new version. To update right away instead: `brew update && brew upgrade lidawake && brew services restart lidawake`. Versions before 1.2.0 don't update themselves, so they need that once.
 
 ## Recommended usage
 
