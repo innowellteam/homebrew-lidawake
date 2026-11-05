@@ -3,7 +3,7 @@ class Lidawake < Formula
   homepage "https://github.com/innowellteam/homebrew-lidawake"
   # The repo is internal, and Homebrew downloads source in a sandbox that can't use your GitHub
   # login. This repo is also the tap, so brew already has a clone of it: build from that.
-  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.2.0", revision: "25f674a078d7d8ef5bdc247bbd4a4d4a5f5e8986"
+  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.3.0", revision: "17644700e1a2cbd59e435c739738cdc22df2688d"
   license "MIT"
   head "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, branch: "main"
 
@@ -11,7 +11,7 @@ class Lidawake < Formula
   # Xcode Command Line Tools. The app is universal and needs macOS 13, so one bottle fits all.
   bottle do
     root_url "file://#{Tap.fetch("innowellteam", "lidawake").path}/bottles"
-    sha256 cellar: :any_skip_relocation, all: "b2a277c9f1a12db6e3f4ba313073c40c8a468468f382996142ae9d58d9eb7e31"
+    sha256 cellar: :any_skip_relocation, all: "fa4e06667f78178adb1246be5cdbb87bbd3d1d4acd501703243f6545bc895915"
   end
 
   depends_on :macos
@@ -31,8 +31,8 @@ class Lidawake < Formula
       The first toggle asks for your password once, to install
       /etc/sudoers.d/lidawake (it only allows pmset disablesleep 0/1).
 
-      For heat alerts on your phone, install the ntfy app and choose
-      "Phone Alerts..." from the menu.
+      For heat and battery alerts on your phone, install the ntfy app
+      and choose "Phone Alerts..." from the menu.
 
       Before uninstalling, turn lid sleep back on and remove the rule:
         sudo pmset -a disablesleep 0
