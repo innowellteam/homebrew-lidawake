@@ -1,5 +1,6 @@
 import AppKit
 import IOKit.ps
+import notify
 
 // pmset needs root. On first toggle we install this rule (one admin prompt) so later
 // toggles can run `sudo -n pmset ...` without asking. It allows exactly two commands.
@@ -111,24 +112,32 @@ func upgradeThroughBrew(_ prefix: String) -> Bool {
     return true
 }
 
-// The battery's charge in percent while the Mac is running on it; nil on power, or with no battery.
-func batteryPercentOnBattery() -> Int? {
+// The internal battery's charge in percent.
+func batteryPercent() -> Int {
     let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
     let sources = IOPSCopyPowerSourcesList(info).takeRetainedValue() as [CFTypeRef]
     let battery = sources
         .map { IOPSGetPowerSourceDescription(info, $0).takeUnretainedValue() as! [String: Any] }
-        .first { $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType }
-    guard let battery, battery[kIOPSPowerSourceStateKey] as! String == kIOPSBatteryPowerValue else { return nil }
+        .first { $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType }!
     return (battery[kIOPSCurrentCapacityKey] as! Int) * 100 / (battery[kIOPSMaxCapacityKey] as! Int)
 }
 
-// Sent as the battery runs down past each level: level, ntfy priority, message.
-let batteryWarnings: [(level: Int, priority: Int, message: String)] = [
-    (25, 3, "It's on battery and LidAwake is keeping it awake. Plug it in when you can."),
-    (10, 4, "Plug it in soon."),
-    (5, 5, "Plug it in now. It's nearly flat."),
-    (2, 5, "It's about to run out, and anything running on it will stop."),
-]
+// Minutes of battery left by macOS's estimate; nil while it's still working that out, or on power.
+func batteryMinutesLeft() -> Int? {
+    let seconds = IOPSGetTimeRemainingEstimate()
+    return seconds > 0 ? Int(seconds / 60) : nil
+}
+
+// ntfy priority and message for each of macOS's own low battery warnings. powerd sets Early at 10%
+// and Final at 2% (kSocThresholdEarly and kSocThresholdFinal in its BatteryTimeRemaining.m); IOKit's
+// header still describes them as 20 and 10 minutes left, which is out of date.
+func batteryWarning(_ level: IOPSLowBatteryWarningLevel) -> (priority: Int, message: String)? {
+    switch level {
+    case kIOPSLowBatteryWarningEarly: (4, "Plug it in soon.")
+    case kIOPSLowBatteryWarningFinal: (5, "Plug it in now, or anything running on it will stop.")
+    default: nil
+    }
+}
 
 extension ProcessInfo.ThermalState {
     var label: String {
@@ -152,8 +161,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
     // Highest heat level we've alerted about since the Mac was last back below "Hot".
     var alertedState = ProcessInfo.ThermalState.nominal
-    // Lowest battery level we've warned about since the Mac was last on power.
-    var warnedBatteryLevel = Int.max
     var checkingForUpdate = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -189,14 +196,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { self.checkHeat() }
         }
+        // powerd posts this as the battery drops into each of macOS's low battery warning levels, the
+        // same trigger as macOS's own warning on the Mac's screen. Each level is posted once until
+        // the Mac is back on power, so there's nothing to deduplicate.
+        var lowBatteryToken: Int32 = 0
+        notify_register_dispatch(kIOPSNotifyLowBattery, &lowBatteryToken, .main) { _ in
+            MainActor.assumeIsolated { self.warnLowBattery() }
+        }
         checkHeat()
-        checkBattery()
-        // Pick up changes made outside the app, e.g. pmset run in a terminal, and the battery level.
+        // Pick up changes made outside the app, e.g. pmset run in a terminal.
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
-            MainActor.assumeIsolated {
-                self.checkHeat()
-                self.checkBattery()
-            }
+            MainActor.assumeIsolated { self.checkHeat() }
         }
         // A minute after launch, so the network is up after a login, then hourly.
         RunLoop.main.add(Timer(fire: Date().addingTimeInterval(60), interval: 60 * 60, repeats: true) { _ in
@@ -287,15 +297,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // Like heat alerts, battery warnings only go out while sleep is disabled.
-    func checkBattery() {
-        guard let percent = batteryPercentOnBattery() else {
-            warnedBatteryLevel = .max
-            return
-        }
-        guard let warning = batteryWarnings.last(where: { percent <= $0.level }),
-              warning.level < warnedBatteryLevel, sleepDisabled() else { return }
-        warnedBatteryLevel = warning.level
-        Task { await notifyPhone(title: "Your Mac's battery is at \(percent)%", message: warning.message, priority: warning.priority, tag: "battery") }
+    func warnLowBattery() {
+        guard let warning = batteryWarning(IOPSGetBatteryWarningLevel()), sleepDisabled() else { return }
+        let title = batteryMinutesLeft().map { "Your Mac has about \($0) minutes of battery left" } ?? "Your Mac's battery is low"
+        Task { await notifyPhone(title: title, message: "It's at \(batteryPercent())%. \(warning.message)", priority: warning.priority, tag: "battery") }
     }
 
     // Nobody is at the Mac to see an error for a background alert, so failures are only logged.
