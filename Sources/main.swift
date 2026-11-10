@@ -68,8 +68,9 @@ func trySetSleepDisabled(_ disabled: Bool) -> Bool {
 }
 
 func ensureSleepPermission() -> Bool {
-    if run("/usr/bin/sudo", ["-k", "-n", "-l", "/usr/bin/pmset", "-a", "disablesleep", "0"]).status == 0,
-       run("/usr/bin/sudo", ["-k", "-n", "-l", "/usr/bin/pmset", "-a", "disablesleep", "1"]).status == 0 { return true }
+    // Writing the current value back changes nothing and proves the rule works. `sudo -n -l` can't
+    // be used: for an admin with any other NOPASSWD rule it succeeds for every command.
+    if trySetSleepDisabled(sleepDisabled()) { return true }
     let rule = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1"
     let tmp = sudoersPath + ".tmp"
     let command = [
