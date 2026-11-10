@@ -246,10 +246,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
             await notifyPhone(title: "Your Mac is critically hot", message: "LidAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
-            if !(recovery?.set(false) ?? trySetSleepDisabled(false)) {
-                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sudo rule isn't installed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
-            } else {
+            switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { trySetSleepDisabled(false) }) {
+            case .recovered:
                 ownsSleepOverride = false
+            case .emergency:
+                break
+            case .failed:
+                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sleep command failed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
             }
             refresh()
         }

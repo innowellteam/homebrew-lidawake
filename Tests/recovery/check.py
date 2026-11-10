@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory() as directory:
         return process.stdout.readline().strip()
     def state():
         return (path / 'power').read_text()
+    subprocess.run([binary, "--heat-test"], env=env, check=True)
     worker = start()
     assert worker.stdout.readline().strip() == 'ready'
     assert not (path / 'power').exists(), 'untouched external state'
@@ -41,6 +42,13 @@ with tempfile.TemporaryDirectory() as directory:
     assert worker.stdout.readline().strip() == 'ready' and state() == 'sleep', 'next launch retries recovery'
     assert send(worker, 'awake') == 'ok'
     assert send(worker, 'sleep') == 'ok' and state() == 'sleep'
+    worker.stdin.close()
+    assert worker.wait() == 0
+    worker = start()
+    assert worker.stdout.readline().strip() == 'ready'
+    (path / 'fail-awake').touch()
+    assert send(worker, 'awake') == 'error', 'permission failure is reported'
+    (path / 'fail-awake').unlink()
     worker.stdin.close()
     assert worker.wait() == 0
     controller = subprocess.Popen([binary, '--controller'], stdout=subprocess.PIPE, text=True, env=env)

@@ -90,7 +90,7 @@ func runRecoveryWorker(directory: URL = FileManager.default.homeDirectoryForCurr
         let success: Bool
         switch request {
         case "awake":
-            if owns { success = true }
+            if owns { success = command(true) }
             else if mark(true) {
                 owns = true
                 success = command(true)
@@ -103,4 +103,14 @@ func runRecoveryWorker(directory: URL = FileManager.default.homeDirectoryForCurr
         print(success ? "ok" : "error"); fflush(stdout)
     }
     return restore() ? 0 : 1
+}
+
+enum HeatRestoration {
+    case recovered, emergency, failed
+}
+
+func restoreSleepForHeat(recovery: () -> Bool, emergency: () -> Bool) -> HeatRestoration {
+    if recovery() { return .recovered }
+    if emergency() { return .emergency }
+    return .failed
 }
