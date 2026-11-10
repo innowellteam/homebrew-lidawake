@@ -341,7 +341,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if ownsSleepOverride {
-            guard recovery?.set(false) == true else { return }
+            guard recovery?.set(false) == true else {
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert()
+                alert.messageText = "LidAwake couldn't turn sleep back on"
+                alert.informativeText = "The sudo rule was kept, because it is needed to restore sleep."
+                alert.runModal()
+                return
+            }
             ownsSleepOverride = false
         }
         runAsAdmin("/bin/rm -f \(sudoersPath)", prompt: "LidAwake wants to remove its sudo rule. The next toggle will ask for your password again.")
@@ -362,6 +369,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func refresh() {
         let awake = sleepDisabled()
+        // Sleep came back some other way (the heat fallback, or pmset in a terminal), so the
+        // session is over and updates no longer need to wait for it.
+        if !awake { ownsSleepOverride = false }
         let image = NSImage(
             systemSymbolName: awake ? "sun.max.fill" : "moon.zzz",
             accessibilityDescription: awake ? "Lid sleep disabled" : "Lid sleep enabled"
