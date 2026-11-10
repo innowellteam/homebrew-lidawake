@@ -7,6 +7,8 @@ A tiny macOS menu bar app that toggles `pmset -a disablesleep`, so your Mac keep
 
 Left-click the icon to toggle. Right-click (or control-click) for the menu.
 
+When sleep is disabled and the lid is closed, LidAwake puts the built-in display to sleep. If an external display is connected, it leaves displays alone so you can continue using clamshell mode.
+
 While it's keeping your Mac awake, it also watches the Mac's heat and battery and alerts your phone if it runs hot or low (see [Phone alerts](#phone-alerts)).
 
 ## Install
