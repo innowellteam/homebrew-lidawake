@@ -67,6 +67,21 @@ func trySetSleepDisabled(_ disabled: Bool) -> Bool {
     run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-a", "disablesleep", disabled ? "1" : "0"]).status == 0
 }
 
+// Turning sleep back on doesn't put an already-closed Mac to sleep: macOS only reacts to the lid
+// closing, and idle sleep is blocked by anything holding a sleep assertion (caffeinate, say).
+// An external display means clamshell use, so that case is left alone.
+func sleepNowIfLidClosed() {
+    guard lidIsClosed(), !(onlineDisplayStates() ?? []).contains(where: { !$0.builtIn }) else { return }
+    _ = run("/usr/bin/pmset", ["sleepnow"])
+}
+
+// The worker's command: after restoring sleep, make sure a closed Mac actually sleeps.
+func recoveryCommandThenSleep(_ awake: Bool) -> Bool {
+    guard recoveryCommand(awake) else { return false }
+    if !awake { sleepNowIfLidClosed() }
+    return true
+}
+
 func ensureSleepPermission() -> Bool {
     // Writing the current value back changes nothing and proves the rule works. `sudo -n -l` can't
     // be used: for an admin with any other NOPASSWD rule it succeeds for every command.
@@ -249,7 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
             await notifyPhone(title: "Your Mac is critically hot", message: "LidAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
-            switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { trySetSleepDisabled(false) }) {
+            switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { guard trySetSleepDisabled(false) else { return false }; sleepNowIfLidClosed(); return true }) {
             case .recovered:
                 ownsSleepOverride = false
             case .emergency:
@@ -364,7 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 }
 
-if CommandLine.arguments.dropFirst() == ["--sleep-recovery-worker"] { exit(runRecoveryWorker()) }
+if CommandLine.arguments.dropFirst() == ["--sleep-recovery-worker"] { exit(runRecoveryWorker(command: recoveryCommandThenSleep)) }
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared

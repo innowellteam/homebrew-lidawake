@@ -70,7 +70,7 @@ The rule is written and validated with `visudo` as root, and only allows those t
 ## Things to know
 
 - With sleep disabled the Mac never sleeps, including idle sleep and Apple menu > Sleep. Before it goes in a bag, set up [phone alerts](#phone-alerts).
-- When LidAwake disables sleep, a separate worker restores sleep if the app quits or crashes. If both processes stop before recovery, the next launch retries it. A failed restore stays pending until the required sudo rule is available.
+- When LidAwake disables sleep, a separate worker restores sleep if the app quits or crashes. If both processes stop before recovery, the next launch retries it. A failed restore stays pending until the required sudo rule is available. If the lid is closed when sleep is restored and no external display is connected, LidAwake also puts the Mac to sleep, because macOS won't do that for a lid that is already shut.
 - The setting is system-wide. Avoid running another app that manages `pmset disablesleep` at the same time. LidAwake does not claim an override it finds already active at launch. The icon re-checks the real setting every 15 seconds.
 
 ## Uninstall
