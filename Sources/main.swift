@@ -44,19 +44,22 @@ func sleepDisabled() -> Bool {
     return fields?.last == "1"
 }
 
-func runAsAdmin(_ command: String, prompt: String) {
+@discardableResult
+func runAsAdmin(_ command: String, prompt: String) -> Bool {
     func quoted(_ s: String) -> String {
         "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
     let source = "do shell script \(quoted(command)) with prompt \(quoted(prompt)) with administrator privileges"
     var error: NSDictionary?
     NSAppleScript(source: source)!.executeAndReturnError(&error)
-    guard let error, error[NSAppleScript.errorNumber] as? Int != -128 else { return } // -128: user cancelled
+    guard let error else { return true }
+    guard error[NSAppleScript.errorNumber] as? Int != -128 else { return false } // -128: user cancelled
     NSApp.activate(ignoringOtherApps: true)
     let alert = NSAlert()
     alert.messageText = "LidAwake couldn't change the sleep setting"
     alert.informativeText = error[NSAppleScript.errorMessage] as? String ?? "\(error)"
     alert.runModal()
+    return false
 }
 
 // Toggles through the sudo rule. Returns false, without prompting, if the rule isn't installed.
@@ -64,12 +67,25 @@ func trySetSleepDisabled(_ disabled: Bool) -> Bool {
     run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-a", "disablesleep", disabled ? "1" : "0"]).status == 0
 }
 
-func setSleepDisabled(_ disabled: Bool) {
-    if trySetSleepDisabled(disabled) { return }
+// Turning sleep back on doesn't put an already-closed Mac to sleep: macOS only reacts to the lid
+// closing, and idle sleep is blocked by anything holding a sleep assertion (caffeinate, say).
+// An external display means clamshell use, so that case is left alone.
+func sleepNowIfLidClosed() {
+    guard lidIsClosed(), !(onlineDisplayStates() ?? []).contains(where: { !$0.builtIn }) else { return }
+    _ = run("/usr/bin/pmset", ["sleepnow"])
+}
 
-    // No rule yet. Write it as root straight into /etc/sudoers.d (sudo skips names containing
-    // a dot, so the .tmp file is inert), validate it, move it into place, then toggle.
-    let value = disabled ? "1" : "0"
+// The worker's command: after restoring sleep, make sure a closed Mac actually sleeps.
+func recoveryCommandThenSleep(_ awake: Bool) -> Bool {
+    guard recoveryCommand(awake) else { return false }
+    if !awake { sleepNowIfLidClosed() }
+    return true
+}
+
+func ensureSleepPermission() -> Bool {
+    // Writing the current value back changes nothing and proves the rule works. `sudo -n -l` can't
+    // be used: for an admin with any other NOPASSWD rule it succeeds for every command.
+    if trySetSleepDisabled(sleepDisabled()) { return true }
     let rule = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1"
     let tmp = sudoersPath + ".tmp"
     let command = [
@@ -77,78 +93,8 @@ func setSleepDisabled(_ disabled: Bool) {
         "/bin/chmod 0440 \(tmp)",
         "/usr/sbin/visudo -cf \(tmp)",
         "/bin/mv \(tmp) \(sudoersPath)",
-        "/usr/bin/pmset -a disablesleep \(value)",
     ].joined(separator: " && ") + "; s=$?; /bin/rm -f \(tmp); exit $s"
-    runAsAdmin(command, prompt: "LidAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
-}
-
-struct PhoneAlertError: Error, CustomStringConvertible {
-    let description: String
-}
-
-// Priority and tags are ntfy's: 3 default, 4 high, 5 urgent; tags are emoji shortcodes.
-func sendPhoneAlert(title: String, message: String, priority: Int, tag: String) async throws {
-    var request = URLRequest(url: URL(string: UserDefaults.standard.string(forKey: ntfyURLKey)!)!, timeoutInterval: 15)
-    request.httpMethod = "POST"
-    request.httpBody = Data(message.utf8)
-    request.setValue(title, forHTTPHeaderField: "Title")
-    request.setValue(String(priority), forHTTPHeaderField: "Priority")
-    request.setValue(tag, forHTTPHeaderField: "Tags")
-    let (_, response) = try await URLSession.shared.data(for: request)
-    let status = (response as! HTTPURLResponse).statusCode
-    guard status == 200 else { throw PhoneAlertError(description: "ntfy returned HTTP \(status)") }
-}
-
-// Runs `brew update`, then upgrades LidAwake if there's a new version. False if brew failed.
-func upgradeThroughBrew(_ prefix: String) -> Bool {
-    let brew = "\(prefix)/bin/brew"
-    for args in [[brew, "update", "--quiet"], ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "upgrade", "innowellteam/lidawake/lidawake"]] {
-        let result = run("/usr/bin/env", args)
-        guard result.status == 0 else {
-            NSLog("LidAwake: \(args.joined(separator: " ")) failed: \(result.output)")
-            return false
-        }
-    }
-    return true
-}
-
-// The internal battery's charge in percent.
-func batteryPercent() -> Int {
-    let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
-    let sources = IOPSCopyPowerSourcesList(info).takeRetainedValue() as [CFTypeRef]
-    let battery = sources
-        .map { IOPSGetPowerSourceDescription(info, $0).takeUnretainedValue() as! [String: Any] }
-        .first { $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType }!
-    return (battery[kIOPSCurrentCapacityKey] as! Int) * 100 / (battery[kIOPSMaxCapacityKey] as! Int)
-}
-
-// Minutes of battery left by macOS's estimate; nil while it's still working that out, or on power.
-func batteryMinutesLeft() -> Int? {
-    let seconds = IOPSGetTimeRemainingEstimate()
-    return seconds > 0 ? Int(seconds / 60) : nil
-}
-
-// ntfy priority and message for each of macOS's own low battery warnings. powerd sets Early at 10%
-// and Final at 2% (kSocThresholdEarly and kSocThresholdFinal in its BatteryTimeRemaining.m); IOKit's
-// header still describes them as 20 and 10 minutes left, which is out of date.
-func batteryWarning(_ level: IOPSLowBatteryWarningLevel) -> (priority: Int, message: String)? {
-    switch level {
-    case kIOPSLowBatteryWarningEarly: (4, "Plug it in soon.")
-    case kIOPSLowBatteryWarningFinal: (5, "Plug it in now, or anything running on it will stop.")
-    default: nil
-    }
-}
-
-extension ProcessInfo.ThermalState {
-    var label: String {
-        switch self {
-        case .nominal: "Normal"
-        case .fair: "Warm"
-        case .serious: "Hot"
-        case .critical: "Critical"
-        @unknown default: "Unknown"
-        }
-    }
+    return runAsAdmin(command, prompt: "LidAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
 }
 
 @MainActor
@@ -162,9 +108,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Highest heat level we've alerted about since the Mac was last back below "Hot".
     var alertedState = ProcessInfo.ThermalState.nominal
     var checkingForUpdate = false
+    var recovery: SleepRecovery?
+    var ownsSleepOverride = false
     var displaySleepMonitor: DisplaySleepMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        signal(SIGPIPE, SIG_IGN)
+        startRecovery()
         UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true])
         if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
             let topic = "lidawake-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20)
@@ -216,10 +166,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }, forMode: .common)
     }
 
+    func startRecovery() {
+        recovery = try? SleepRecovery(onExit: { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.recovery = nil
+                self.ownsSleepOverride = false
+                self.startRecovery()
+                self.refresh()
+            }
+        })
+    }
+
     // At most once a day. A failed check (say, while offline) is retried on the next hourly tick.
     func checkForUpdate() {
         let lastCheck = UserDefaults.standard.object(forKey: lastUpdateCheckKey) as? Date ?? .distantPast
-        guard let prefix = brewPrefix, !checkingForUpdate, Date().timeIntervalSince(lastCheck) > 24 * 60 * 60 else { return }
+        guard !ownsSleepOverride, let prefix = brewPrefix, !checkingForUpdate, Date().timeIntervalSince(lastCheck) > 24 * 60 * 60 else { return }
         checkingForUpdate = true
         Task.detached {
             let succeeded = upgradeThroughBrew(prefix)
@@ -236,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Under brew services, launchd gives our job's label (e.g. sh.brew.lidawake) in XPC_SERVICE_NAME,
         // and restarting the job starts the new version. Opened any other way, the label is
         // "application.org.innowell.lidawake.<ids>", and the new version waits for the next launch.
-        guard let label = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"], label.hasSuffix(".lidawake") else { return }
+        guard !ownsSleepOverride, let label = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"], label.hasSuffix(".lidawake") else { return }
         run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(label)"])
     }
 
@@ -257,7 +219,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func toggle() {
-        setSleepDisabled(!sleepDisabled())
+        let awake = !sleepDisabled()
+        guard ensureSleepPermission() else { return }
+        if recovery == nil { startRecovery() }
+        guard let recovery, recovery.set(awake) else {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "LidAwake couldn't change the sleep setting"
+            alert.informativeText = "Sleep recovery is unavailable. Quit LidAwake and try again."
+            alert.runModal()
+            return
+        }
+        ownsSleepOverride = awake
         refresh()
     }
 
@@ -291,8 +264,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
             await notifyPhone(title: "Your Mac is critically hot", message: "LidAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
-            if !trySetSleepDisabled(false) {
-                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sudo rule isn't installed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
+            switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { guard trySetSleepDisabled(false) else { return false }; sleepNowIfLidClosed(); return true }) {
+            case .recovered:
+                ownsSleepOverride = false
+            case .emergency:
+                break
+            case .failed:
+                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sleep command failed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
             }
             refresh()
         }
@@ -353,6 +331,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func removeRule() {
+        if recovery == nil { startRecovery() }
+        guard recovery != nil else {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "Sleep recovery is unavailable"
+            alert.informativeText = "The sudo rule is needed until sleep recovery succeeds. Quit and reopen LidAwake, then try again."
+            alert.runModal()
+            return
+        }
+        if ownsSleepOverride {
+            guard recovery?.set(false) == true else {
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert()
+                alert.messageText = "LidAwake couldn't turn sleep back on"
+                alert.informativeText = "The sudo rule was kept, because it is needed to restore sleep."
+                alert.runModal()
+                return
+            }
+            ownsSleepOverride = false
+        }
         runAsAdmin("/bin/rm -f \(sudoersPath)", prompt: "LidAwake wants to remove its sudo rule. The next toggle will ask for your password again.")
         refresh()
     }
@@ -371,6 +369,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func refresh() {
         let awake = sleepDisabled()
+        // Sleep came back some other way (the heat fallback, or pmset in a terminal), so the
+        // session is over and updates no longer need to wait for it.
+        if !awake { ownsSleepOverride = false }
         let image = NSImage(
             systemSymbolName: awake ? "sun.max.fill" : "moon.zzz",
             accessibilityDescription: awake ? "Lid sleep disabled" : "Lid sleep enabled"
@@ -387,6 +388,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         removeRuleItem.isHidden = !FileManager.default.fileExists(atPath: sudoersPath)
     }
 }
+
+if CommandLine.arguments.dropFirst() == ["--sleep-recovery-worker"] { exit(runRecoveryWorker(command: recoveryCommandThenSleep)) }
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared

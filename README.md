@@ -20,7 +20,7 @@ brew services start lidawake   # start now and at every login
 
 The repo is internal to the Innowell GitHub, so brew clones it with your GitHub login. If the install can't read the repo, run `gh auth login` and then `gh auth setup-git` so git can use that login. Brew installs a prebuilt app that runs on Apple Silicon and Intel, so there's nothing to compile.
 
-LidAwake keeps itself up to date. Once a day it runs `brew update` and `brew upgrade lidawake`, then restarts into the new version. To update right away instead: `brew update && brew upgrade lidawake && brew services restart lidawake`. Versions before 1.2.0 don't update themselves, so they need that once.
+LidAwake keeps itself up to date. Once a day it runs `brew update` and `brew upgrade lidawake`, then restarts into the new version. Update checks and automatic restarts wait while LidAwake is keeping the Mac awake, so they do not interrupt a closed-lid session. To update right away instead: `brew update && brew upgrade lidawake && brew services restart lidawake`. Versions before 1.2.0 don't update themselves, so they need that once.
 
 ## Recommended usage
 
@@ -70,7 +70,8 @@ The rule is written and validated with `visudo` as root, and only allows those t
 ## Things to know
 
 - With sleep disabled the Mac never sleeps, including idle sleep and Apple menu > Sleep. Before it goes in a bag, set up [phone alerts](#phone-alerts).
-- The setting is system-wide and outlives the app. Quitting LidAwake doesn't change it, and the icon always reflects the real state (it re-checks every 15 seconds, so changes made in a terminal show up too).
+- When LidAwake disables sleep, a separate worker restores sleep if the app quits or crashes. If both processes stop before recovery, the next launch retries it. A failed restore stays pending until the required sudo rule is available. If the lid is closed when sleep is restored and no external display is connected, LidAwake also puts the Mac to sleep, because macOS won't do that for a lid that is already shut.
+- The setting is system-wide. Avoid running another app that manages `pmset disablesleep` at the same time. LidAwake does not claim an override it finds already active at launch. The icon re-checks the real setting every 15 seconds.
 
 ## Uninstall
 
@@ -89,6 +90,7 @@ Building needs the Xcode Command Line Tools (`xcode-select --install`).
 ```sh
 brew services stop lidawake   # so you don't get two icons
 make                          # builds build/LidAwake.app
+make test                     # exercises recovery with simulated power settings
 open build/LidAwake.app
 ```
 
