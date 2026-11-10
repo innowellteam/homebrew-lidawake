@@ -3,16 +3,16 @@ APP := build/LidAwake.app
 VERSION := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
 BOTTLE := bottles/lidawake-$(VERSION).all.bottle.tar.gz
 
-.PHONY: all install bottle clean
+.PHONY: all install bottle clean test
 
 all: $(APP)
 
 # Universal, so one build runs on Apple Silicon and Intel Macs.
-$(APP): Sources/main.swift Resources/Info.plist
+$(APP): $(wildcard Sources/*.swift) Resources/Info.plist
 	rm -rf $@ build/arch
 	mkdir -p $@/Contents/MacOS build/arch
-	swiftc -O -target arm64-apple-macos13.0 -o build/arch/arm64 Sources/main.swift
-	swiftc -O -target x86_64-apple-macos13.0 -o build/arch/x86_64 Sources/main.swift
+	swiftc -O -target arm64-apple-macos13.0 -o build/arch/arm64 Sources/*.swift
+	swiftc -O -target x86_64-apple-macos13.0 -o build/arch/x86_64 Sources/*.swift
 	lipo -create -output $@/Contents/MacOS/LidAwake build/arch/arm64 build/arch/x86_64
 	cp Resources/Info.plist $@/Contents/
 	codesign --force --sign - $@
@@ -32,3 +32,8 @@ bottle: $(APP)
 
 clean:
 	rm -rf build
+
+test:
+	mkdir -p build
+	swiftc -o build/recovery-test Sources/Recovery.swift Tests/recovery/main.swift
+	python3 Tests/recovery/check.py "$(CURDIR)/build/recovery-test"
