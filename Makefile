@@ -38,9 +38,14 @@ test:
 clean:
 	rm -rf build
 
-test: test-recovery
+test: test-recovery test-session
 
-.PHONY: test-recovery
+.PHONY: test-recovery test-session
+test-session:
+	mkdir -p build
+	swiftc -o build/session-test Sources/Session.swift Tests/SessionTests.swift
+	build/session-test
+
 test-recovery:
 	mkdir -p build
 	swiftc -o build/recovery-test Sources/Recovery.swift Tests/recovery/main.swift

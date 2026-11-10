@@ -7,6 +7,8 @@ A tiny macOS menu bar app that toggles `pmset -a disablesleep`, so your Mac keep
 
 Left-click the icon to toggle. Right-click (or control-click) for the menu.
 
+To stay awake for a set time, right-click and choose **Stay Awake For** 15, 30, 45 minutes or 1 hour. When the time is up LidAwake turns sleep back on, and a closed Mac goes to sleep. The menu shows how long is left. Left-click to stop early, or pick another time to restart the clock.
+
 When sleep is disabled and the lid is closed, LidAwake puts the built-in display to sleep. If an external display is connected, it leaves displays alone so you can continue using clamshell mode.
 
 While it's keeping your Mac awake, it also watches the Mac's heat and battery and alerts your phone if it runs hot or low (see [Phone alerts](#phone-alerts)).
