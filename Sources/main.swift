@@ -94,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var checkingForUpdate = false
     var recovery: SleepRecovery?
     var ownsSleepOverride = false
+    var displaySleepMonitor: DisplaySleepMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         signal(SIGPIPE, SIG_IGN)
@@ -138,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self.warnLowBattery() }
         }
         checkHeat()
+        displaySleepMonitor = DisplaySleepMonitor()
         // Pick up changes made outside the app, e.g. pmset run in a terminal.
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
             MainActor.assumeIsolated { self.checkHeat() }

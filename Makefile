@@ -30,10 +30,18 @@ bottle: $(APP)
 	COPYFILE_DISABLE=1 tar --no-mac-metadata -C build/bottle -czf $(BOTTLE) lidawake
 	shasum -a 256 $(BOTTLE)
 
+test:
+	mkdir -p build
+	swiftc Sources/DisplaySleep.swift Tests/DisplaySleepTests.swift -o build/display-sleep-tests
+	build/display-sleep-tests
+
 clean:
 	rm -rf build
 
-test:
+test: test-recovery
+
+.PHONY: test-recovery
+test-recovery:
 	mkdir -p build
 	swiftc -o build/recovery-test Sources/Recovery.swift Tests/recovery/main.swift
 	python3 Tests/recovery/check.py "$(CURDIR)/build/recovery-test"
