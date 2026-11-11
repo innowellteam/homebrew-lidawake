@@ -107,3 +107,11 @@ To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD
 5. `brew update && brew upgrade lidawake && brew services restart lidawake`
 
 Brew reads the bottle from its own clone of this repo, the same way it reads the source, so neither needs a GitHub token.
+
+## Session logs
+
+To collect a baseline, turn on **Record Session Logs** in the menu. This is off by default and stays on until you turn it off. While sleep is disabled, LidAwake saves a local JSON Lines file for each logging session. Choose **Show Session Logs in Finder** to open the folder. Nothing is uploaded.
+
+Each sample records the time, lid state, macOS thermal pressure, Low Power Mode, battery charge, power source, and the battery's reported voltage and current when available. Samples are taken about once a minute and when the lid, heat level, or Low Power Mode changes. Battery current and voltage are hardware-reported values, and may not be available on every Mac. Battery current is signed, with negative values indicating discharge. An absent value is omitted. Thermal pressure is not a temperature reading and cannot show the temperature inside a bag. These logs cannot establish that a Mac is safe in a bag.
+
+Low Power Mode is observed, not changed. To compare sessions, switch it yourself in macOS and use a similar workload and starting conditions. Logging stops when you turn it off or sleep is enabled again.

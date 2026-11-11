@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let timeLeftItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let heatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sleepWhenCriticalItem = NSMenuItem(title: "Let Mac Sleep If Critically Hot", action: #selector(toggleSleepWhenCritical), keyEquivalent: "")
+    let sessionLoggingItem = NSMenuItem(title: "Record Session Logs", action: #selector(toggleSessionLogging), keyEquivalent: "")
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
     // Highest heat level we've alerted about since the Mac was last back below "Hot".
     var alertedState = ProcessInfo.ThermalState.nominal
@@ -40,9 +41,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var awakeUntil: Date?
     var sessionTimer: Timer?
     var displaySleepMonitor: DisplaySleepMonitor?
+    let sessionLog = SessionLog()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         signal(SIGPIPE, SIG_IGN)
+        sessionLog.onError = { error in
+            UserDefaults.standard.set(false, forKey: sessionLoggingKey)
+            DispatchQueue.main.async {
+                self.refresh()
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert(error: error)
+                alert.messageText = "LidAwake couldn't save the session log"
+                alert.informativeText = "Session logging has been turned off. \(error.localizedDescription)"
+                alert.runModal()
+            }
+        }
         startRecovery()
         UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true])
         if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
@@ -53,6 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.target = self
         sleepWhenCriticalItem.target = self
         removeRuleItem.target = self
+        sessionLoggingItem.target = self
+        let showLogsItem = NSMenuItem(title: "Show Session Logs in Finder", action: #selector(showSessionLogs), keyEquivalent: "")
+        showLogsItem.target = self
         let phoneAlertsItem = NSMenuItem(title: "Phone Alerts…", action: #selector(showPhoneAlerts), keyEquivalent: "")
         phoneAlertsItem.target = self
         let aboutItem = NSMenuItem(title: "About LidAwake", action: #selector(showAbout), keyEquivalent: "")
@@ -71,6 +87,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(heatItem)
         menu.addItem(sleepWhenCriticalItem)
         menu.addItem(phoneAlertsItem)
+        menu.addItem(sessionLoggingItem)
+        menu.addItem(showLogsItem)
         menu.addItem(.separator())
         menu.addItem(removeRuleItem)
         menu.addItem(aboutItem)
@@ -166,6 +184,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func toggleSleepWhenCritical() {
         UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: sleepWhenCriticalKey), forKey: sleepWhenCriticalKey)
         refresh()
+    }
+
+    @objc func toggleSessionLogging() {
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: sessionLoggingKey), forKey: sessionLoggingKey)
+        refresh()
+    }
+
+    @objc func showSessionLogs() {
+        do {
+            try SessionLog.prepareDirectory(SessionLog.directory)
+            NSWorkspace.shared.open(SessionLog.directory)
+        } catch {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert(error: error)
+            alert.runModal()
+        }
     }
 
     // Alerts only go out while sleep is disabled: that's when the Mac might be shut in a bag.
@@ -317,6 +351,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.toolTip = awake
             ? "Staying awake with the lid closed. Click to allow sleep."
             : "Sleeping normally. Click to stay awake with the lid closed."
+        let logging = UserDefaults.standard.bool(forKey: sessionLoggingKey)
+        sessionLoggingItem.state = logging ? .on : .off
+        sessionLog.update(enabled: logging, awake: awake, lidClosed: lidIsClosed(),
+                          thermalPressure: ProcessInfo.processInfo.thermalState.label,
+                          lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled, readings: batteryReadings)
         toggleItem.state = awake ? .on : .off
         heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"
         sleepWhenCriticalItem.state = UserDefaults.standard.bool(forKey: sleepWhenCriticalKey) ? .on : .off
