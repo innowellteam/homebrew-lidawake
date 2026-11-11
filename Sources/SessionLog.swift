@@ -7,6 +7,7 @@ let sessionLoggingKey = "SessionLogging"
 struct SessionSample: Encodable {
     let timestamp: String
     let session: String
+    let event: String
     let lidClosed: Bool
     let thermalPressure: String
     let lowPowerMode: Bool
@@ -52,7 +53,7 @@ final class SessionLog {
     init(directory: URL = SessionLog.directory) { self.directory = directory }
 
     func update(enabled: Bool, awake: Bool, now: Date = Date(), lidClosed: Bool, thermalPressure: String,
-                lowPowerMode: Bool, readings: () -> (source: String?, percent: Int?, voltage: Int?, current: Int?)) {
+                lowPowerMode: Bool, event: String = "sample", readings: () -> (source: String?, percent: Int?, voltage: Int?, current: Int?)) {
         guard enabled && awake else {
             session = nil
             lastSample = nil
@@ -62,9 +63,9 @@ final class SessionLog {
             return
         }
         if session == nil { session = UUID().uuidString }
-        guard lastSample == nil || now.timeIntervalSince(lastSample!) >= 60 || lidClosed != lastLidClosed || thermalPressure != lastThermalPressure || lowPowerMode != lastLowPowerMode else { return }
+        guard event != "sample" || lastSample == nil || now.timeIntervalSince(lastSample!) >= 60 || lidClosed != lastLidClosed || thermalPressure != lastThermalPressure || lowPowerMode != lastLowPowerMode else { return }
         let battery = readings()
-        let sample = SessionSample(timestamp: ISO8601DateFormatter().string(from: now), session: session!, lidClosed: lidClosed,
+        let sample = SessionSample(timestamp: ISO8601DateFormatter().string(from: now), session: session!, event: event, lidClosed: lidClosed,
                                    thermalPressure: thermalPressure, lowPowerMode: lowPowerMode, powerSource: battery.source,
                                    batteryPercent: battery.percent, batteryVoltageMillivolts: battery.voltage, batteryCurrentMilliamps: battery.current)
         do {
