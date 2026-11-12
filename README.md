@@ -64,10 +64,10 @@ Things worth knowing:
 `pmset` needs root. The first time you toggle, LidAwake asks for your admin password once and installs `/etc/sudoers.d/lidawake`:
 
 ```
-<you> ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1
+<you> ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -b lowpowermode 0, /usr/bin/pmset -b lowpowermode 1, /usr/bin/pmset -c lowpowermode 0, /usr/bin/pmset -c lowpowermode 1
 ```
 
-The rule is written and validated with `visudo` as root, and only allows those two exact commands. After that, toggles run `sudo -n pmset ...` with no prompt. Use "Remove sudo Rule…" in the menu to take it out again.
+The rule is written and validated with `visudo` as root, and only allows those six exact commands. The `lowpowermode` ones are only used if you tick **Low Power Mode When Lid Closes**. A rule installed by an older version covers sleep only, so ticking that option the first time asks for your password once more to update it. After that, toggles run `sudo -n pmset ...` with no prompt. Use "Remove sudo Rule…" in the menu to take it out again.
 
 ## Things to know
 
@@ -107,6 +107,14 @@ To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD
 5. `brew update && brew upgrade lidawake && brew services restart lidawake`
 
 Brew reads the bottle from its own clone of this repo, the same way it reads the source, so neither needs a GitHub token.
+
+## Low Power Mode with the lid closed
+
+Tick **Low Power Mode When Lid Closes** to have LidAwake turn on macOS Low Power Mode whenever it is keeping the Mac awake and the lid is closed. It is off by default. LidAwake checks every 15 seconds, so it switches on shortly after you close the lid.
+
+It only switches back what it changed. If Low Power Mode was already on for battery, for example, LidAwake leaves that alone. Its change is undone when you open the lid, sleep comes back on, you untick the option, you remove the sudo rule, or LidAwake quits. If LidAwake crashes, it undoes the change the next time it runs.
+
+In one afternoon of session logs on a MacBook Pro running on battery with the lid closed, Low Power Mode used about 8 W against 14 to 19 W without it, and battery drain fell from about 26% to 11% an hour. Without it, macOS reported "Warm" after 17 minutes. With it, heat stayed "Normal" for 70 minutes. That was one run each with everyday apps open, so treat the numbers as a guide. The cost is slower performance while the lid is closed.
 
 ## Session logs
 

@@ -63,11 +63,23 @@ func recoveryCommandThenSleep(_ awake: Bool) -> Bool {
     return true
 }
 
+// Writing the current value back changes nothing and proves the rule works. `sudo -n -l` can't
+// be used: for an admin with any other NOPASSWD rule it succeeds for every command.
 func ensureSleepPermission() -> Bool {
-    // Writing the current value back changes nothing and proves the rule works. `sudo -n -l` can't
-    // be used: for an admin with any other NOPASSWD rule it succeeds for every command.
     if trySetSleepDisabled(sleepDisabled()) { return true }
-    let rule = "\(NSUserName()) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1"
+    return installSudoRule(prompt: "LidAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
+}
+
+// Rules installed before 1.8.0 only cover sleep, so opting in to Low Power Mode may need one more prompt.
+func ensureLowPowerPermission() -> Bool {
+    let settings = currentLowPowerSettings()
+    if !settings.isEmpty, settings.allSatisfy({ trySetLowPowerMode($0.key, $0.value) }) { return true }
+    return installSudoRule(prompt: "LidAwake needs to update its sudo rule so it can switch Low Power Mode on and off while the lid is closed.")
+}
+
+func installSudoRule(prompt: String) -> Bool {
+    let commands = ["-a disablesleep 0", "-a disablesleep 1", "-b lowpowermode 0", "-b lowpowermode 1", "-c lowpowermode 0", "-c lowpowermode 1"]
+    let rule = "\(NSUserName()) ALL=(root) NOPASSWD: " + commands.map { "/usr/bin/pmset \($0)" }.joined(separator: ", ")
     let tmp = sudoersPath + ".tmp"
     let command = [
         "printf '%s\\n' '\(rule)' > \(tmp)",
@@ -75,5 +87,14 @@ func ensureSleepPermission() -> Bool {
         "/usr/sbin/visudo -cf \(tmp)",
         "/bin/mv \(tmp) \(sudoersPath)",
     ].joined(separator: " && ") + "; s=$?; /bin/rm -f \(tmp); exit $s"
-    return runAsAdmin(command, prompt: "LidAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
+    return runAsAdmin(command, prompt: prompt)
+}
+
+func currentLowPowerSettings() -> [String: Bool] {
+    lowPowerSettings(run("/usr/bin/pmset", ["-g", "custom"]).output)
+}
+
+// Through the sudo rule. Returns false, without prompting, if the rule doesn't allow it.
+func trySetLowPowerMode(_ source: String, _ on: Bool) -> Bool {
+    run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-\(source)", "lowpowermode", on ? "1" : "0"]).status == 0
 }
