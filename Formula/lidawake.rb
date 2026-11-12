@@ -3,7 +3,7 @@ class Lidawake < Formula
   homepage "https://github.com/innowellteam/homebrew-lidawake"
   # The repo is internal, and Homebrew downloads source in a sandbox that can't use your GitHub
   # login. This repo is also the tap, so brew already has a clone of it: build from that.
-  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.7.0", revision: "8f646704fcb6e6a62cee94714acc3b8424f0e5af"
+  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.8.0", revision: "bcf117ec04998ad6edc64081cfbb34bd19aefd0c"
   license "MIT"
   head "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, branch: "main"
 
@@ -11,7 +11,7 @@ class Lidawake < Formula
   # Xcode Command Line Tools. The app is universal and needs macOS 13, so one bottle fits all.
   bottle do
     root_url "file://#{Tap.fetch("innowellteam", "lidawake").path}/bottles"
-    sha256 cellar: :any_skip_relocation, all: "1da7ae7096e8a45f5b4b75f2e3ab0a699cc48591dadbef273fe789c8d129a60e"
+    sha256 cellar: :any_skip_relocation, all: "2deafd4b085c342a58d941b4872c05e831e6eb8b75551b4da0a5a90046c6882c"
   end
 
   depends_on :macos
