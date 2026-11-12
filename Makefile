@@ -58,3 +58,11 @@ test-session-log:
 	mkdir -p build
 	swiftc -o build/session-log-test Sources/SessionLog.swift Tests/SessionLogTests.swift
 	build/session-log-test
+
+test: test-low-power
+
+.PHONY: test-low-power
+test-low-power:
+	mkdir -p build
+	swiftc -o build/low-power-test Sources/LowPower.swift Tests/LowPowerTests.swift
+	build/low-power-test

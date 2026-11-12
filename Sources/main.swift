@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let timedItem = NSMenuItem(title: "Stay Awake For", action: nil, keyEquivalent: "")
     let timeLeftItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let screenOffItem = NSMenuItem(title: "Turn Off Screen When Lid Closes", action: #selector(toggleScreenOff), keyEquivalent: "")
+    let lowPowerItem = NSMenuItem(title: "Low Power Mode When Lid Closes", action: #selector(toggleLowPower), keyEquivalent: "")
     let heatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sleepWhenCriticalItem = NSMenuItem(title: "Let Mac Sleep If Critically Hot", action: #selector(toggleSleepWhenCritical), keyEquivalent: "")
     let sessionLoggingItem = NSMenuItem(title: "Record Session Logs", action: #selector(toggleSessionLogging), keyEquivalent: "")
@@ -66,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         toggleItem.target = self
         screenOffItem.target = self
+        lowPowerItem.target = self
         sleepWhenCriticalItem.target = self
         removeRuleItem.target = self
         sessionLoggingItem.target = self
@@ -86,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(timedItem)
         menu.addItem(timeLeftItem)
         menu.addItem(screenOffItem)
+        menu.addItem(lowPowerItem)
         menu.addItem(.separator())
         menu.addItem(heatItem)
         menu.addItem(sleepWhenCriticalItem)
@@ -328,6 +331,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             ownsSleepOverride = false
         }
+        // Undo Low Power Mode while the rule still allows it.
+        updateLowPowerMode(awake: false)
         runAsAdmin("/bin/rm -f \(sudoersPath)", prompt: "LidAwake wants to remove its sudo rule. The next toggle will ask for your password again.")
         refresh()
     }
@@ -373,11 +378,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.toolTip = awake
             ? "Staying awake with the lid closed. Click to allow sleep."
             : "Sleeping normally. Click to stay awake with the lid closed."
+        updateLowPowerMode(awake: awake)
         let logging = UserDefaults.standard.bool(forKey: sessionLoggingKey)
         sessionLoggingItem.state = logging ? .on : .off
         logSessionEvent("sample", awake: awake)
         toggleItem.state = awake ? .on : .off
         screenOffItem.state = UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey) ? .on : .off
+        lowPowerItem.state = UserDefaults.standard.bool(forKey: lowPowerWhenLidClosedKey) ? .on : .off
         heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"
         sleepWhenCriticalItem.state = UserDefaults.standard.bool(forKey: sleepWhenCriticalKey) ? .on : .off
         removeRuleItem.isHidden = !FileManager.default.fileExists(atPath: sudoersPath)
