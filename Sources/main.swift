@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let screenOffItem = NSMenuItem(title: "Turn Off Screen When Lid Closes", action: #selector(toggleScreenOff), keyEquivalent: "")
     let heatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sleepWhenCriticalItem = NSMenuItem(title: "Let Mac Sleep If Critically Hot", action: #selector(toggleSleepWhenCritical), keyEquivalent: "")
+    let sessionLoggingItem = NSMenuItem(title: "Record Session Logs", action: #selector(toggleSessionLogging), keyEquivalent: "")
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
     // Highest heat level we've alerted about since the Mac was last back below "Hot".
     var alertedState = ProcessInfo.ThermalState.nominal
@@ -41,9 +42,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var awakeUntil: Date?
     var sessionTimer: Timer?
     var displaySleepMonitor: DisplaySleepMonitor?
+    let sessionLog = SessionLog()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         signal(SIGPIPE, SIG_IGN)
+        sessionLog.onError = { error in
+            UserDefaults.standard.set(false, forKey: sessionLoggingKey)
+            DispatchQueue.main.async {
+                self.refresh()
+                NSApp.activate(ignoringOtherApps: true)
+                let alert = NSAlert(error: error)
+                alert.messageText = "LidAwake couldn't save the session log"
+                alert.informativeText = "Session logging has been turned off. \(error.localizedDescription)"
+                alert.runModal()
+            }
+        }
         startRecovery()
         UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true, screenOffWhenLidClosedKey: true])
         if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
@@ -55,6 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         screenOffItem.target = self
         sleepWhenCriticalItem.target = self
         removeRuleItem.target = self
+        sessionLoggingItem.target = self
+        let showLogsItem = NSMenuItem(title: "Show Session Logs in Finder", action: #selector(showSessionLogs), keyEquivalent: "")
+        showLogsItem.target = self
         let phoneAlertsItem = NSMenuItem(title: "Phone Alerts…", action: #selector(showPhoneAlerts), keyEquivalent: "")
         phoneAlertsItem.target = self
         let aboutItem = NSMenuItem(title: "About LidAwake", action: #selector(showAbout), keyEquivalent: "")
@@ -74,6 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(heatItem)
         menu.addItem(sleepWhenCriticalItem)
         menu.addItem(phoneAlertsItem)
+        menu.addItem(sessionLoggingItem)
+        menu.addItem(showLogsItem)
         menu.addItem(.separator())
         menu.addItem(removeRuleItem)
         menu.addItem(aboutItem)
@@ -176,6 +194,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refresh()
     }
 
+    @objc func toggleSessionLogging() {
+        let wasEnabled = UserDefaults.standard.bool(forKey: sessionLoggingKey)
+        if wasEnabled { logSessionEvent("logging_disabled") }
+        UserDefaults.standard.set(!wasEnabled, forKey: sessionLoggingKey)
+        refresh()
+    }
+
+    @objc func showSessionLogs() {
+        do {
+            try SessionLog.prepareDirectory(SessionLog.directory)
+            NSWorkspace.shared.open(SessionLog.directory)
+        } catch {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert(error: error)
+            alert.runModal()
+        }
+    }
+
     // Alerts only go out while sleep is disabled: that's when the Mac might be shut in a bag.
     func checkHeat() {
         refresh()
@@ -201,12 +237,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
             await notifyPhone(title: "Your Mac is critically hot", message: "LidAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
+            logSessionEvent("critical_heat_sleep_requested")
             switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { guard trySetSleepDisabled(false) else { return false }; sleepNowIfLidClosed(); return true }) {
             case .recovered:
                 ownsSleepOverride = false
             case .emergency:
                 break
             case .failed:
+                logSessionEvent("critical_heat_sleep_failed")
                 await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sleep command failed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
             }
             refresh()
@@ -278,7 +316,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if ownsSleepOverride {
+            logSessionEvent("sudo_rule_removal_sleep_requested")
             guard recovery?.set(false) == true else {
+                logSessionEvent("sudo_rule_removal_sleep_failed")
                 NSApp.activate(ignoringOtherApps: true)
                 let alert = NSAlert()
                 alert.messageText = "LidAwake couldn't turn sleep back on"
@@ -304,6 +344,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
+    func logSessionEvent(_ event: String, awake: Bool? = nil) {
+        sessionLog.update(enabled: UserDefaults.standard.bool(forKey: sessionLoggingKey),
+                          awake: awake ?? sleepDisabled(), lidClosed: lidIsClosed(),
+                          thermalPressure: ProcessInfo.processInfo.thermalState.label,
+                          lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                          event: event, readings: batteryReadings)
+    }
+
     func refresh() {
         let awake = sleepDisabled()
         // Sleep came back some other way (the heat fallback, or pmset in a terminal), so the
@@ -325,6 +373,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.toolTip = awake
             ? "Staying awake with the lid closed. Click to allow sleep."
             : "Sleeping normally. Click to stay awake with the lid closed."
+        let logging = UserDefaults.standard.bool(forKey: sessionLoggingKey)
+        sessionLoggingItem.state = logging ? .on : .off
+        logSessionEvent("sample", awake: awake)
         toggleItem.state = awake ? .on : .off
         screenOffItem.state = UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey) ? .on : .off
         heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"

@@ -50,3 +50,11 @@ test-recovery:
 	mkdir -p build
 	swiftc -o build/recovery-test Sources/Recovery.swift Tests/recovery/main.swift
 	python3 Tests/recovery/check.py "$(CURDIR)/build/recovery-test"
+
+test: test-session-log
+
+.PHONY: test-session-log
+test-session-log:
+	mkdir -p build
+	swiftc -o build/session-log-test Sources/SessionLog.swift Tests/SessionLogTests.swift
+	build/session-log-test
