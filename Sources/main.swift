@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let toggleItem = NSMenuItem(title: "Stay Awake With Lid Closed", action: #selector(toggle), keyEquivalent: "")
     let timedItem = NSMenuItem(title: "Stay Awake For", action: nil, keyEquivalent: "")
     let timeLeftItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let screenOffItem = NSMenuItem(title: "Turn Off Screen When Lid Closes", action: #selector(toggleScreenOff), keyEquivalent: "")
     let heatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sleepWhenCriticalItem = NSMenuItem(title: "Let Mac Sleep If Critically Hot", action: #selector(toggleSleepWhenCritical), keyEquivalent: "")
     let removeRuleItem = NSMenuItem(title: "Remove sudo Rule…", action: #selector(removeRule), keyEquivalent: "")
@@ -44,13 +45,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         signal(SIGPIPE, SIG_IGN)
         startRecovery()
-        UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true])
+        UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true, screenOffWhenLidClosedKey: true])
         if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
             let topic = "lidawake-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20)
             UserDefaults.standard.set("https://ntfy.sh/\(topic)", forKey: ntfyURLKey)
         }
 
         toggleItem.target = self
+        screenOffItem.target = self
         sleepWhenCriticalItem.target = self
         removeRuleItem.target = self
         let phoneAlertsItem = NSMenuItem(title: "Phone Alerts…", action: #selector(showPhoneAlerts), keyEquivalent: "")
@@ -67,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggleItem)
         menu.addItem(timedItem)
         menu.addItem(timeLeftItem)
+        menu.addItem(screenOffItem)
         menu.addItem(.separator())
         menu.addItem(heatItem)
         menu.addItem(sleepWhenCriticalItem)
@@ -161,6 +164,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func toggle() {
         setAwake(!sleepDisabled(), minutes: nil)
+    }
+
+    @objc func toggleScreenOff() {
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey), forKey: screenOffWhenLidClosedKey)
+        refresh()
     }
 
     @objc func toggleSleepWhenCritical() {
@@ -318,6 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ? "Staying awake with the lid closed. Click to allow sleep."
             : "Sleeping normally. Click to stay awake with the lid closed."
         toggleItem.state = awake ? .on : .off
+        screenOffItem.state = UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey) ? .on : .off
         heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"
         sleepWhenCriticalItem.state = UserDefaults.standard.bool(forKey: sleepWhenCriticalKey) ? .on : .off
         removeRuleItem.isHidden = !FileManager.default.fileExists(atPath: sudoersPath)

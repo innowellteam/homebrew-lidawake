@@ -2,6 +2,10 @@ import CoreGraphics
 import Foundation
 import IOKit
 
+// On by default. Unticking "Turn Off Screen When Lid Closes" in the menu keeps the built-in screen on,
+// for example to record the screen with the lid shut.
+let screenOffWhenLidClosedKey = "ScreenOffWhenLidClosed"
+
 struct DisplayState {
     let builtIn: Bool
     let asleep: Bool
@@ -40,7 +44,7 @@ final class DisplaySleepMonitor {
         timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "org.innowell.lidawake.display"))
         timer.schedule(deadline: .now(), repeating: .seconds(2))
         timer.setEventHandler {
-            guard lidIsClosed(), let displays = onlineDisplayStates() else { return }
+            guard UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey), lidIsClosed(), let displays = onlineDisplayStates() else { return }
             sleepDisplayIfNeeded(lidClosed: true, displays: displays, isKeepingAwake: sleepDisabled) {
                 let result = run("/usr/bin/pmset", ["displaysleepnow"])
                 if result.status != 0 { NSLog("LidAwake: display sleep failed: \(result.output)") }
