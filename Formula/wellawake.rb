@@ -3,7 +3,7 @@ class Wellawake < Formula
   homepage "https://github.com/innowellteam/homebrew-wellawake"
   # The repo is internal, and Homebrew downloads source in a sandbox that can't use your GitHub
   # login. This repo is also the tap, so brew already has a clone of it: build from that.
-  url "file://#{Tap.fetch("innowellteam", "wellawake").path}", using: :git, tag: "v1.8.0", revision: "bcf117ec04998ad6edc64081cfbb34bd19aefd0c"
+  url "file://#{Tap.fetch("innowellteam", "wellawake").path}", using: :git, tag: "v2.0.0", revision: "79ba751e6d496645dd35098010ebb38ef231cc54"
   license "MIT"
   head "file://#{Tap.fetch("innowellteam", "wellawake").path}", using: :git, branch: "main"
 
@@ -11,7 +11,7 @@ class Wellawake < Formula
   # Xcode Command Line Tools. The app is universal and needs macOS 13, so one bottle fits all.
   bottle do
     root_url "file://#{Tap.fetch("innowellteam", "wellawake").path}/bottles"
-    sha256 cellar: :any_skip_relocation, all: "2deafd4b085c342a58d941b4872c05e831e6eb8b75551b4da0a5a90046c6882c"
+    sha256 cellar: :any_skip_relocation, all: "06ddcfaa6da87a449d1d6458109d4a82086c8eba2d2303af67c45bc0da551363"
   end
 
   depends_on :macos
