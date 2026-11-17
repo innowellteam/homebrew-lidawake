@@ -3,7 +3,7 @@ class Wellawake < Formula
   homepage "https://github.com/innowellteam/homebrew-lidawake"
   # This repo is also the tap, so brew already has a clone of it: build from that. It's found from
   # this file's folder rather than by name, so it still works if the repo (and with it the tap) is renamed.
-  url "file://#{File.expand_path("..", __dir__)}", using: :git, tag: "v2.0.1", revision: "9c30300157772e87668acb50061ab5089f738ec2"
+  url "file://#{File.expand_path("..", __dir__)}", using: :git, tag: "v2.1.0", revision: "ea3c2544ff7d2a1059df757e07d495f17ad10a68"
   license "MIT"
   head "file://#{File.expand_path("..", __dir__)}", using: :git, branch: "main"
 
@@ -11,7 +11,7 @@ class Wellawake < Formula
   # Xcode Command Line Tools. The app is universal and needs macOS 13, so one bottle fits all.
   bottle do
     root_url "file://#{File.expand_path("../bottles", __dir__)}"
-    sha256 cellar: :any_skip_relocation, all: "f61af9df6d9f48eb5484aad7a2a3614c859e10f3ea1aa21756e5c72c8fd741d5"
+    sha256 cellar: :any_skip_relocation, all: "e49d4255cec1232f99afbad1535f61ae568d15d3e6568f64b325272f5882f2bf"
   end
 
   depends_on :macos
