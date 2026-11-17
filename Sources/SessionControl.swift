@@ -13,8 +13,8 @@ extension AppDelegate {
             if !awake { logSessionEvent("manual_sleep_failed") }
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
-            alert.messageText = "LidAwake couldn't change the sleep setting"
-            alert.informativeText = "Sleep recovery is unavailable. Quit LidAwake and try again."
+            alert.messageText = "WellAwake couldn't change the sleep setting"
+            alert.informativeText = "Sleep recovery is unavailable. Quit WellAwake and try again."
             alert.runModal()
             return
         }
@@ -42,7 +42,7 @@ extension AppDelegate {
         scheduleSessionEnd(minutes: nil)
         Task {
             // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
-            await notifyPhone(title: "LidAwake's timer finished", message: "Sleep is back on. If the lid is closed your Mac is going to sleep.", priority: 3, tag: "zzz")
+            await notifyPhone(title: "WellAwake's timer finished", message: "Sleep is back on. If the lid is closed your Mac is going to sleep.", priority: 3, tag: "zzz")
             logSessionEvent("timer_sleep_requested")
             switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { guard trySetSleepDisabled(false) else { return false }; sleepNowIfLidClosed(); return true }) {
             case .recovered:
@@ -51,7 +51,7 @@ extension AppDelegate {
                 break
             case .failed:
                 logSessionEvent("timer_sleep_failed")
-                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The timer finished but the sleep command failed. Your Mac is still awake.", priority: 5, tag: "warning")
+                await notifyPhone(title: "WellAwake couldn't turn sleep back on", message: "The timer finished but the sleep command failed. Your Mac is still awake.", priority: 5, tag: "warning")
             }
             refresh()
         }

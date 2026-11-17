@@ -1,0 +1,22 @@
+#!/bin/sh
+# LidAwake is now WellAwake. This stand-in is LidAwake's last version. When an older LidAwake
+# updates itself, it restarts its brew service into this, which installs WellAwake and starts it at
+# login. WellAwake then stops this service and uninstalls LidAwake and its tap (Sources/Rename.swift).
+# Brew's own formula renames can't do this: they leave the old login item pointing at an app that
+# no longer exists.
+
+case "$0" in
+    */Cellar/lidawake/*) prefix="${0%%/Cellar/lidawake/*}" ;;
+    *) prefix="${0%%/opt/lidawake/*}" ;;
+esac
+brew="$prefix/bin/brew"
+log="$HOME/Library/Logs/LidAwake to WellAwake.log"
+export HOMEBREW_NO_AUTO_UPDATE=1
+
+until {
+    echo "$(date): installing WellAwake"
+    "$brew" install innowellteam/wellawake/wellawake && "$brew" services start innowellteam/wellawake/wellawake
+} >>"$log" 2>&1; do
+    /usr/bin/osascript -e "display notification \"Installing WellAwake, LidAwake's new name, failed. Trying again in an hour. Details: ~/Library/Logs/LidAwake to WellAwake.log\" with title \"LidAwake\""
+    sleep 3600
+done

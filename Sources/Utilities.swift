@@ -18,13 +18,13 @@ func sendPhoneAlert(title: String, message: String, priority: Int, tag: String) 
     guard status == 200 else { throw PhoneAlertError(description: "ntfy returned HTTP \(status)") }
 }
 
-// Runs `brew update`, then upgrades LidAwake if there's a new version. False if brew failed.
+// Runs `brew update`, then upgrades WellAwake if there's a new version. False if brew failed.
 func upgradeThroughBrew(_ prefix: String) -> Bool {
     let brew = "\(prefix)/bin/brew"
-    for args in [[brew, "update", "--quiet"], ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "upgrade", "innowellteam/lidawake/lidawake"]] {
+    for args in [[brew, "update", "--quiet"], ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "upgrade", "innowellteam/wellawake/wellawake"]] {
         let result = run("/usr/bin/env", args)
         guard result.status == 0 else {
-            NSLog("LidAwake: \(args.joined(separator: " ")) failed: \(result.output)")
+            NSLog("WellAwake: \(args.joined(separator: " ")) failed: \(result.output)")
             return false
         }
     }

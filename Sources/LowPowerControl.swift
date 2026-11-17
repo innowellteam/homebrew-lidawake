@@ -15,16 +15,16 @@ extension AppDelegate {
         guard wanted || !owned.isEmpty else { return }
         let plan = lowPowerPlan(wanted: wanted, settings: wanted ? currentLowPowerSettings() : [:], owned: owned)
         for source in plan.turnOn {
-            // Recorded first, so a crash mid-change still leaves LidAwake responsible for undoing it.
+            // Recorded first, so a crash mid-change still leaves WellAwake responsible for undoing it.
             owned.insert(source)
             UserDefaults.standard.set(owned.sorted(), forKey: lowPowerOwnedKey)
             if !trySetLowPowerMode(source, true) {
                 owned.remove(source)
-                NSLog("LidAwake: couldn't turn on Low Power Mode for pmset -\(source)")
+                NSLog("WellAwake: couldn't turn on Low Power Mode for pmset -\(source)")
             }
         }
         for source in plan.restore {
-            if trySetLowPowerMode(source, false) { owned.remove(source) } else { NSLog("LidAwake: couldn't restore Low Power Mode for pmset -\(source)") }
+            if trySetLowPowerMode(source, false) { owned.remove(source) } else { NSLog("WellAwake: couldn't restore Low Power Mode for pmset -\(source)") }
         }
         UserDefaults.standard.set(owned.sorted(), forKey: lowPowerOwnedKey)
     }

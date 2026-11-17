@@ -37,7 +37,7 @@ func runAsAdmin(_ command: String, prompt: String) -> Bool {
     guard error[NSAppleScript.errorNumber] as? Int != -128 else { return false } // -128: user cancelled
     NSApp.activate(ignoringOtherApps: true)
     let alert = NSAlert()
-    alert.messageText = "LidAwake couldn't change the sleep setting"
+    alert.messageText = "WellAwake couldn't change the sleep setting"
     alert.informativeText = error[NSAppleScript.errorMessage] as? String ?? "\(error)"
     alert.runModal()
     return false
@@ -67,14 +67,14 @@ func recoveryCommandThenSleep(_ awake: Bool) -> Bool {
 // be used: for an admin with any other NOPASSWD rule it succeeds for every command.
 func ensureSleepPermission() -> Bool {
     if trySetSleepDisabled(sleepDisabled()) { return true }
-    return installSudoRule(prompt: "LidAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
+    return installSudoRule(prompt: "WellAwake needs to install a sudo rule so it can switch lid sleep on and off without asking for your password each time.")
 }
 
 // Rules installed before 1.8.0 only cover sleep, so opting in to Low Power Mode may need one more prompt.
 func ensureLowPowerPermission() -> Bool {
     let settings = currentLowPowerSettings()
     if !settings.isEmpty, settings.allSatisfy({ trySetLowPowerMode($0.key, $0.value) }) { return true }
-    return installSudoRule(prompt: "LidAwake needs to update its sudo rule so it can switch Low Power Mode on and off while the lid is closed.")
+    return installSudoRule(prompt: "WellAwake needs to update its sudo rule so it can switch Low Power Mode on and off while the lid is closed.")
 }
 
 func installSudoRule(prompt: String) -> Bool {
@@ -86,6 +86,7 @@ func installSudoRule(prompt: String) -> Bool {
         "/bin/chmod 0440 \(tmp)",
         "/usr/sbin/visudo -cf \(tmp)",
         "/bin/mv \(tmp) \(sudoersPath)",
+        "/bin/rm -f \(legacySudoersPath)",
     ].joined(separator: " && ") + "; s=$?; /bin/rm -f \(tmp); exit $s"
     return runAsAdmin(command, prompt: prompt)
 }

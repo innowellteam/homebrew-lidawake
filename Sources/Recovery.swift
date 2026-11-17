@@ -58,7 +58,7 @@ func recoveryCommand(_ awake: Bool) -> Bool {
     do { try task.run(); task.waitUntilExit(); return task.terminationStatus == 0 } catch { return false }
 }
 
-func runRecoveryWorker(directory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/org.innowell.lidawake", isDirectory: true), command: (Bool) -> Bool = recoveryCommand) -> Int32 {
+func runRecoveryWorker(directory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/org.innowell.wellawake", isDirectory: true), command: (Bool) -> Bool = recoveryCommand) -> Int32 {
     signal(SIGPIPE, SIG_IGN)
     do {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

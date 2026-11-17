@@ -36,7 +36,7 @@ func batteryReadings() -> (source: String?, percent: Int?, voltage: Int?, curren
 
 final class SessionLog {
     static let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("LidAwake/Session Logs", isDirectory: true)
+        .appendingPathComponent("WellAwake/Session Logs", isDirectory: true)
     static func prepareDirectory(_ directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
@@ -86,7 +86,7 @@ final class SessionLog {
             lastThermalPressure = thermalPressure
             lastLowPowerMode = lowPowerMode
         } catch {
-            NSLog("LidAwake: session log write failed: \(error)")
+            NSLog("WellAwake: session log write failed: \(error)")
             onError?(error)
         }
     }

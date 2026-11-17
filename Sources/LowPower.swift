@@ -1,9 +1,9 @@
 import Foundation
 
-// Off by default. When ticked, LidAwake turns on Low Power Mode while it keeps a closed Mac awake,
+// Off by default. When ticked, WellAwake turns on Low Power Mode while it keeps a closed Mac awake,
 // and puts the setting back when the lid opens, sleep returns, or the option is turned off.
 let lowPowerWhenLidClosedKey = "LowPowerWhenLidClosed"
-// The pmset sources ("b" battery, "c" AC) that LidAwake switched on. Saved, so after a crash it
+// The pmset sources ("b" battery, "c" AC) that WellAwake switched on. Saved, so after a crash it
 // still undoes only its own change and never one the person made.
 let lowPowerOwnedKey = "LowPowerModeOwnedSources"
 
@@ -25,7 +25,7 @@ struct LowPowerPlan: Equatable {
 }
 
 // Wanted: switch on each source that is off and not already ours. A source the person turns off
-// again while the lid is closed stays off. Not wanted: switch off only what LidAwake switched on.
+// again while the lid is closed stays off. Not wanted: switch off only what WellAwake switched on.
 func lowPowerPlan(wanted: Bool, settings: [String: Bool], owned: Set<String>) -> LowPowerPlan {
     guard wanted else { return LowPowerPlan(turnOn: [], restore: owned.sorted()) }
     return LowPowerPlan(turnOn: settings.filter { !$0.value && !owned.contains($0.key) }.keys.sorted(), restore: [])

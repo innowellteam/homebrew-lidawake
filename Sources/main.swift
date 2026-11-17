@@ -4,18 +4,18 @@ import notify
 
 // pmset needs root. On first toggle we install this rule (one admin prompt) so later
 // toggles can run `sudo -n pmset ...` without asking. It allows exactly two commands.
-let sudoersPath = "/etc/sudoers.d/lidawake"
+let sudoersPath = "/etc/sudoers.d/wellawake"
 
 // Heat alerts are posted here. A random ntfy.sh topic is generated on first launch; point it at
-// your own server with `defaults write org.innowell.lidawake NtfyURL <url>`.
+// your own server with `defaults write org.innowell.wellawake NtfyURL <url>`.
 let ntfyURLKey = "NtfyURL"
 let sleepWhenCriticalKey = "SleepWhenCritical"
 
-// LidAwake keeps itself up to date through brew. Brew installs it at
-// <prefix>/Cellar/lidawake/<version>/LidAwake.app; a local build lives elsewhere and never updates.
+// WellAwake keeps itself up to date through brew. Brew installs it at
+// <prefix>/Cellar/wellawake/<version>/WellAwake.app; a local build lives elsewhere and never updates.
 let brewPrefix: String? = {
     let path = Bundle.main.bundleURL.resolvingSymlinksInPath().path
-    return path.range(of: "/Cellar/lidawake/").map { String(path[..<$0.lowerBound]) }
+    return path.range(of: "/Cellar/wellawake/").map { String(path[..<$0.lowerBound]) }
 }()
 let lastUpdateCheckKey = "LastUpdateCheck"
 
@@ -53,15 +53,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.refresh()
                 NSApp.activate(ignoringOtherApps: true)
                 let alert = NSAlert(error: error)
-                alert.messageText = "LidAwake couldn't save the session log"
+                alert.messageText = "WellAwake couldn't save the session log"
                 alert.informativeText = "Session logging has been turned off. \(error.localizedDescription)"
                 alert.runModal()
             }
         }
+        adoptLidAwakeSettings()
         startRecovery()
         UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true, screenOffWhenLidClosedKey: true])
         if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
-            let topic = "lidawake-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20)
+            let topic = "wellawake-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20)
             UserDefaults.standard.set("https://ntfy.sh/\(topic)", forKey: ntfyURLKey)
         }
 
@@ -75,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showLogsItem.target = self
         let phoneAlertsItem = NSMenuItem(title: "Phone Alerts…", action: #selector(showPhoneAlerts), keyEquivalent: "")
         phoneAlertsItem.target = self
-        let aboutItem = NSMenuItem(title: "About LidAwake", action: #selector(showAbout), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "About WellAwake", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
         timedItem.submenu = NSMenu()
         for minutes in sessionMinutes {
@@ -98,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(removeRuleItem)
         menu.addItem(aboutItem)
-        menu.addItem(NSMenuItem(title: "Quit LidAwake", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit WellAwake", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         menu.delegate = self
 
         let button = statusItem.button!
@@ -129,6 +130,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         RunLoop.main.add(Timer(fire: Date().addingTimeInterval(60), interval: 60 * 60, repeats: true) { _ in
             MainActor.assumeIsolated { self.checkForUpdate() }
         }, forMode: .common)
+        // After a move from LidAwake, give the stand-in that started us half a minute to finish, then
+        // remove it. Update checks wait for this, so the two don't run brew at the same time.
+        if let prefix = brewPrefix {
+            checkingForUpdate = true
+            Task.detached {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                removeLidAwake(brewPrefix: prefix)
+                await MainActor.run { self.checkingForUpdate = false }
+            }
+        }
     }
 
     func startRecovery() {
@@ -158,12 +169,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         checkingForUpdate = false
         guard succeeded else { return }
         UserDefaults.standard.set(Date(), forKey: lastUpdateCheckKey)
-        let installed = NSDictionary(contentsOfFile: "\(prefix)/opt/lidawake/LidAwake.app/Contents/Info.plist")!
+        let installed = NSDictionary(contentsOfFile: "\(prefix)/opt/wellawake/WellAwake.app/Contents/Info.plist")!
         guard installed["CFBundleVersion"] as! String != Bundle.main.infoDictionary!["CFBundleVersion"] as! String else { return }
-        // Under brew services, launchd gives our job's label (e.g. sh.brew.lidawake) in XPC_SERVICE_NAME,
+        // Under brew services, launchd gives our job's label (e.g. sh.brew.wellawake) in XPC_SERVICE_NAME,
         // and restarting the job starts the new version. Opened any other way, the label is
-        // "application.org.innowell.lidawake.<ids>", and the new version waits for the next launch.
-        guard !ownsSleepOverride, let label = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"], label.hasSuffix(".lidawake") else { return }
+        // "application.org.innowell.wellawake.<ids>", and the new version waits for the next launch.
+        guard !ownsSleepOverride, let label = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"], label.hasSuffix(".wellawake") else { return }
         run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(label)"])
     }
 
@@ -239,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         Task {
             // Alert first: once sleep is back on, a closed Mac goes to sleep and drops off the network.
-            await notifyPhone(title: "Your Mac is critically hot", message: "LidAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
+            await notifyPhone(title: "Your Mac is critically hot", message: "WellAwake turned sleep back on so it can cool down. If the lid is closed it will go to sleep.", priority: 5, tag: "fire")
             logSessionEvent("critical_heat_sleep_requested")
             switch restoreSleepForHeat(recovery: { recovery?.set(false) == true }, emergency: { guard trySetSleepDisabled(false) else { return false }; sleepNowIfLidClosed(); return true }) {
             case .recovered:
@@ -248,7 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 break
             case .failed:
                 logSessionEvent("critical_heat_sleep_failed")
-                await notifyPhone(title: "LidAwake couldn't turn sleep back on", message: "The sleep command failed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
+                await notifyPhone(title: "WellAwake couldn't turn sleep back on", message: "The sleep command failed. Your Mac is still awake and critically hot.", priority: 5, tag: "warning")
             }
             refresh()
         }
@@ -266,7 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             try await sendPhoneAlert(title: title, message: message, priority: priority, tag: tag)
         } catch {
-            NSLog("LidAwake: phone alert failed: \(error)")
+            NSLog("WellAwake: phone alert failed: \(error)")
         }
     }
 
@@ -282,7 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             Server: \(url.host!)
 
-            While LidAwake is keeping your Mac awake, it alerts you when the Mac runs hot or its battery runs low.
+            While WellAwake is keeping your Mac awake, it alerts you when the Mac runs hot or its battery runs low.
             """
         alert.addButton(withTitle: "Copy Topic")
         alert.addButton(withTitle: "Send Test Alert")
@@ -294,7 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .alertSecondButtonReturn:
             Task {
                 do {
-                    try await sendPhoneAlert(title: "LidAwake test", message: "Phone alerts are working.", priority: 3, tag: "white_check_mark")
+                    try await sendPhoneAlert(title: "WellAwake test", message: "Phone alerts are working.", priority: 3, tag: "white_check_mark")
                 } catch {
                     NSApp.activate(ignoringOtherApps: true)
                     let failed = NSAlert()
@@ -314,7 +325,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Sleep recovery is unavailable"
-            alert.informativeText = "The sudo rule is needed until sleep recovery succeeds. Quit and reopen LidAwake, then try again."
+            alert.informativeText = "The sudo rule is needed until sleep recovery succeeds. Quit and reopen WellAwake, then try again."
             alert.runModal()
             return
         }
@@ -324,7 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 logSessionEvent("sudo_rule_removal_sleep_failed")
                 NSApp.activate(ignoringOtherApps: true)
                 let alert = NSAlert()
-                alert.messageText = "LidAwake couldn't turn sleep back on"
+                alert.messageText = "WellAwake couldn't turn sleep back on"
                 alert.informativeText = "The sudo rule was kept, because it is needed to restore sleep."
                 alert.runModal()
                 return
@@ -333,20 +344,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // Undo Low Power Mode while the rule still allows it.
         updateLowPowerMode(awake: false)
-        runAsAdmin("/bin/rm -f \(sudoersPath)", prompt: "LidAwake wants to remove its sudo rule. The next toggle will ask for your password again.")
+        runAsAdmin("/bin/rm -f \(sudoersPath) \(legacySudoersPath)", prompt: "WellAwake wants to remove its sudo rule. The next toggle will ask for your password again.")
         refresh()
     }
 
     @objc func showAbout() {
-        let centered = NSMutableParagraphStyle()
-        centered.alignment = .center
-        let credits = NSAttributedString(string: "Made with love at Innowell", attributes: [
-            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-            .foregroundColor: NSColor.secondaryLabelColor,
-            .paragraphStyle: centered,
-        ])
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: aboutCredits()])
     }
 
     func logSessionEvent(_ event: String, awake: Bool? = nil) {
@@ -387,7 +391,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         lowPowerItem.state = UserDefaults.standard.bool(forKey: lowPowerWhenLidClosedKey) ? .on : .off
         heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"
         sleepWhenCriticalItem.state = UserDefaults.standard.bool(forKey: sleepWhenCriticalKey) ? .on : .off
-        removeRuleItem.isHidden = !FileManager.default.fileExists(atPath: sudoersPath)
+        removeRuleItem.isHidden = ![sudoersPath, legacySudoersPath].contains { FileManager.default.fileExists(atPath: $0) }
     }
 }
 

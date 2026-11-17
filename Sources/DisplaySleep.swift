@@ -41,13 +41,13 @@ final class DisplaySleepMonitor {
     private let timer: DispatchSourceTimer
 
     init() {
-        timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "org.innowell.lidawake.display"))
+        timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "org.innowell.wellawake.display"))
         timer.schedule(deadline: .now(), repeating: .seconds(2))
         timer.setEventHandler {
             guard UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey), lidIsClosed(), let displays = onlineDisplayStates() else { return }
             sleepDisplayIfNeeded(lidClosed: true, displays: displays, isKeepingAwake: sleepDisabled) {
                 let result = run("/usr/bin/pmset", ["displaysleepnow"])
-                if result.status != 0 { NSLog("LidAwake: display sleep failed: \(result.output)") }
+                if result.status != 0 { NSLog("WellAwake: display sleep failed: \(result.output)") }
             }
         }
         timer.resume()
