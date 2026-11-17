@@ -8,11 +8,11 @@ BOTTLE := bottles/wellawake-$(VERSION).all.bottle.tar.gz
 all: $(APP)
 
 # Universal, so one build runs on Apple Silicon and Intel Macs.
-$(APP): $(wildcard Sources/*.swift) Resources/Info.plist $(wildcard Resources/*.png)
+$(APP): $(wildcard Sources/*.swift) Sources/CGVirtualDisplay.h Resources/Info.plist $(wildcard Resources/*.png)
 	rm -rf $@ build/arch
 	mkdir -p $@/Contents/MacOS $@/Contents/Resources build/arch
-	swiftc -O -target arm64-apple-macos13.0 -o build/arch/arm64 Sources/*.swift
-	swiftc -O -target x86_64-apple-macos13.0 -o build/arch/x86_64 Sources/*.swift
+	swiftc -O -target arm64-apple-macos13.0 -import-objc-header Sources/CGVirtualDisplay.h -o build/arch/arm64 Sources/*.swift
+	swiftc -O -target x86_64-apple-macos13.0 -import-objc-header Sources/CGVirtualDisplay.h -o build/arch/x86_64 Sources/*.swift
 	lipo -create -output $@/Contents/MacOS/WellAwake build/arch/arm64 build/arch/x86_64
 	cp Resources/Info.plist $@/Contents/
 	cp Resources/*.png $@/Contents/Resources/

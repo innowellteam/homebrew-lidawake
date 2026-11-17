@@ -21,6 +21,13 @@ func sendPhoneAlert(title: String, message: String, priority: Int, tag: String) 
 // Runs `brew update`, then upgrades WellAwake if there's a new version. False if brew failed.
 func upgradeThroughBrew(_ prefix: String) -> Bool {
     let brew = "\(prefix)/bin/brew"
+    // Trusting our own tap lets `brew update` follow the GitHub repo if it's renamed. Otherwise brew refuses
+    // that redirect for a tap you've trusted formulae from (installing WellAwake trusts it), and the tap
+    // stops updating. Brew before 7 has no `trust`, and needs none.
+    if let tap = brewTap(prefix, containing: "wellawake") {
+        let trust = run("/usr/bin/env", ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "trust", "--tap", tap])
+        if trust.status != 0 { NSLog("WellAwake: brew trust --tap \(tap) failed: \(trust.output)") }
+    }
     let update = run("/usr/bin/env", [brew, "update", "--quiet"])
     guard update.status == 0 else {
         NSLog("WellAwake: brew update failed: \(update.output)")

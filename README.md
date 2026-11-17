@@ -11,6 +11,8 @@ To stay awake for a set time, right-click and choose **Stay Awake For** 15, 30, 
 
 When sleep is disabled and the lid is closed, WellAwake puts the built-in display to sleep. If an external display is connected, it leaves displays alone so you can continue using clamshell mode. To keep the screen on with the lid closed, for example to record the screen, untick "Turn Off Screen When Lid Closes" in the menu.
 
+Tick "Virtual Screen" in the menu to add a 1920x1080 screen that exists only in software, so you don't need BetterDisplay or a dummy plug (see [Virtual screen](#virtual-screen)).
+
 While it's keeping your Mac awake, it also watches the Mac's heat and battery and alerts your phone if it runs hot or low (see [Phone alerts](#phone-alerts)).
 
 ## Install
@@ -122,6 +124,16 @@ To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD
 5. `brew update && brew upgrade wellawake && brew services restart wellawake`
 
 Brew reads the bottle from its own clone of this repo, the same way it reads the source, so neither needs a GitHub token.
+
+## Virtual screen
+
+Ticking **Virtual Screen** adds a screen called WellAwake, 1920x1080, that macOS treats as an external monitor. It's there while WellAwake is running with the option ticked, and it's off by default.
+
+- Lid closed, monitor off: windows move onto the virtual screen and keep drawing, so browser automation such as Claude in Chrome keeps working. Without it there's no screen left awake, the display sleeps, the Mac locks, and Chrome stops drawing pages nobody can see. While WellAwake is keeping the Mac awake with the virtual screen on, it also holds off idle display sleep, which would lock the Mac.
+- Recording demos: it's a fixed 1080p screen to put a browser window on, out of your way. Move windows to it with the mouse, or set where it sits in System Settings > Displays (macOS remembers).
+- From a script: `defaults write org.innowell.wellawake VirtualScreen -bool true` (or `false`). WellAwake picks it up within 15 seconds.
+
+It uses the same unpublished part of macOS (CGVirtualDisplay) as BetterDisplay and DeskPad. A macOS update could change it; if it stops working, WellAwake says so and unticks the option.
 
 ## Low Power Mode with the lid closed
 
