@@ -21,14 +21,39 @@ func sendPhoneAlert(title: String, message: String, priority: Int, tag: String) 
 // Runs `brew update`, then upgrades WellAwake if there's a new version. False if brew failed.
 func upgradeThroughBrew(_ prefix: String) -> Bool {
     let brew = "\(prefix)/bin/brew"
-    for args in [[brew, "update", "--quiet"], ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "upgrade", "innowellteam/wellawake/wellawake"]] {
-        let result = run("/usr/bin/env", args)
-        guard result.status == 0 else {
-            NSLog("WellAwake: \(args.joined(separator: " ")) failed: \(result.output)")
-            return false
-        }
+    let update = run("/usr/bin/env", [brew, "update", "--quiet"])
+    guard update.status == 0 else {
+        NSLog("WellAwake: brew update failed: \(update.output)")
+        return false
+    }
+    // Looked up after updating: when the GitHub repo is renamed, `brew update` renames its copy of the tap.
+    // Named in full, because brew only loads a formula from a tap you haven't trusted when the command names it.
+    guard let tap = brewTap(prefix, containing: "wellawake") else {
+        NSLog("WellAwake: no brew tap has the wellawake formula")
+        return false
+    }
+    let upgrade = run("/usr/bin/env", ["HOMEBREW_NO_AUTO_UPDATE=1", brew, "upgrade", "\(tap)/wellawake"])
+    guard upgrade.status == 0 else {
+        NSLog("WellAwake: brew upgrade \(tap)/wellawake failed: \(upgrade.output)")
+        return false
     }
     return true
+}
+
+// The tap ("user/repo") whose Formula folder has this formula, e.g. "innowellteam/lidawake". Taps live
+// in the Homebrew repository: the prefix itself on Apple Silicon, <prefix>/Homebrew on Intel.
+func brewTap(_ prefix: String, containing formula: String) -> String? {
+    let files = FileManager.default
+    for taps in ["\(prefix)/Library/Taps", "\(prefix)/Homebrew/Library/Taps"] {
+        for user in (try? files.contentsOfDirectory(atPath: taps)) ?? [] {
+            for repo in (try? files.contentsOfDirectory(atPath: "\(taps)/\(user)")) ?? [] where repo.hasPrefix("homebrew-") {
+                if files.fileExists(atPath: "\(taps)/\(user)/\(repo)/Formula/\(formula).rb") {
+                    return "\(user)/\(repo.dropFirst("homebrew-".count))"
+                }
+            }
+        }
+    }
+    return nil
 }
 
 // The internal battery's charge in percent.

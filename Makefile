@@ -33,11 +33,12 @@ bottle: $(APP)
 
 # LidAwake's last version: the stand-in in Bridge/ that moves LidAwake installs over to WellAwake.
 # Built once. Its bottle stays in bottles/ for as long as an old LidAwake might still update.
-BRIDGE_BOTTLE := bottles/lidawake-2.0.0.all.bottle.tar.gz
+BRIDGE_VERSION := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Bridge/LidAwake.app/Contents/Info.plist)
+BRIDGE_BOTTLE := bottles/lidawake-$(BRIDGE_VERSION).all.bottle.tar.gz
 bridge-bottle:
-	rm -rf build/bridge
-	mkdir -p build/bridge/lidawake/2.0.0 bottles
-	cp -R Bridge/LidAwake.app build/bridge/lidawake/2.0.0/
+	rm -rf build/bridge bottles/lidawake-*.bottle.tar.gz
+	mkdir -p build/bridge/lidawake/$(BRIDGE_VERSION) bottles
+	cp -R Bridge/LidAwake.app build/bridge/lidawake/$(BRIDGE_VERSION)/
 	COPYFILE_DISABLE=1 tar --no-mac-metadata -C build/bridge -czf $(BRIDGE_BOTTLE) lidawake
 	shasum -a 256 $(BRIDGE_BOTTLE)
 

@@ -23,19 +23,11 @@ func adoptLidAwakeSettings() {
 }
 
 // LidAwake's last update installs a stand-in (see Bridge/) that installs WellAwake and starts it at
-// login. Once WellAwake is running, this stops the stand-in and removes it and LidAwake's tap.
-// Runs on every launch from brew, and does nothing once they're gone.
+// login. Once WellAwake is running, this stops the stand-in and uninstalls it. The tap stays: WellAwake
+// comes from it too. Runs on every launch from brew, and does nothing once LidAwake is gone.
 func removeLidAwake(brewPrefix prefix: String) {
-    let installed = FileManager.default.fileExists(atPath: "\(prefix)/Cellar/lidawake")
-    // The tap lives in the Homebrew repository: the prefix itself on Apple Silicon, <prefix>/Homebrew on Intel.
-    let tapped = ["\(prefix)/Library/Taps", "\(prefix)/Homebrew/Library/Taps"]
-        .contains { FileManager.default.fileExists(atPath: "\($0)/innowellteam/homebrew-lidawake") }
-    var steps: [[String]] = []
-    if installed {
-        steps += [["services", "stop", "innowellteam/lidawake/lidawake"], ["uninstall", "innowellteam/lidawake/lidawake"]]
-    }
-    if installed || tapped { steps.append(["untap", "innowellteam/lidawake"]) }
-    for args in steps {
+    guard FileManager.default.fileExists(atPath: "\(prefix)/Cellar/lidawake") else { return }
+    for args in [["services", "stop", "lidawake"], ["uninstall", "lidawake"]] {
         let result = run("/usr/bin/env", ["HOMEBREW_NO_AUTO_UPDATE=1", "\(prefix)/bin/brew"] + args)
         guard result.status == 0 else {
             NSLog("WellAwake: brew \(args.joined(separator: " ")) failed: \(result.output)")
