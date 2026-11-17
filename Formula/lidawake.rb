@@ -1,25 +1,24 @@
+# LidAwake was renamed WellAwake in 2.0. This is LidAwake's last version: a stand-in (Bridge/) that an
+# older LidAwake updates to by itself. It installs WellAwake and starts it at login, and WellAwake then
+# uninstalls it. Keep it while any LidAwake installs might still be around.
 class Lidawake < Formula
-  desc "Menu bar toggle that keeps your Mac awake with the lid closed"
+  desc "LidAwake's last version, which moves an install over to WellAwake"
   homepage "https://github.com/innowellteam/homebrew-lidawake"
-  # The repo is internal, and Homebrew downloads source in a sandbox that can't use your GitHub
-  # login. This repo is also the tap, so brew already has a clone of it: build from that.
-  url "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, tag: "v1.8.0", revision: "bcf117ec04998ad6edc64081cfbb34bd19aefd0c"
+  url "file://#{File.expand_path("..", __dir__)}", using: :git, tag: "v2.0.1", revision: "9c30300157772e87668acb50061ab5089f738ec2"
   license "MIT"
-  head "file://#{Tap.fetch("innowellteam", "lidawake").path}", using: :git, branch: "main"
 
-  # Prebuilt by `make bottle` and kept in the tap too, so installing needs no compiler and no
-  # Xcode Command Line Tools. The app is universal and needs macOS 13, so one bottle fits all.
   bottle do
-    root_url "file://#{Tap.fetch("innowellteam", "lidawake").path}/bottles"
-    sha256 cellar: :any_skip_relocation, all: "2deafd4b085c342a58d941b4872c05e831e6eb8b75551b4da0a5a90046c6882c"
+    root_url "file://#{File.expand_path("../bottles", __dir__)}"
+    sha256 cellar: :any_skip_relocation, all: "dec9218d67661fc985813d6d41b83a4e11e295c79cfb640d967faa514864bda3"
   end
 
   depends_on :macos
 
   def install
-    system "make", "install", "PREFIX=#{prefix}"
+    prefix.install "Bridge/LidAwake.app"
   end
 
+  # Unchanged from LidAwake, so the restart an older LidAwake does after updating runs the stand-in.
   service do
     run opt_prefix/"LidAwake.app/Contents/MacOS/LidAwake"
     process_type :interactive
@@ -27,16 +26,10 @@ class Lidawake < Formula
 
   def caveats
     <<~EOS
-      Left-click the menu bar icon to toggle, right-click for the menu.
-      The first toggle asks for your password once, to install
-      /etc/sudoers.d/lidawake (it only allows pmset disablesleep 0/1).
-
-      For heat and battery alerts on your phone, install the ntfy app
-      and choose "Phone Alerts..." from the menu.
-
-      Before uninstalling, turn lid sleep back on and remove the rule:
-        sudo pmset -a disablesleep 0
-        sudo rm /etc/sudoers.d/lidawake
+      LidAwake is now WellAwake. Running as a brew service, it installs WellAwake and
+      starts it by itself. Otherwise:
+        brew install innowellteam/lidawake/wellawake
+        brew services start wellawake
     EOS
   end
 
