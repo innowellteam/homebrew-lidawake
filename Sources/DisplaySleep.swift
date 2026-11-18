@@ -5,6 +5,9 @@ import IOKit
 // The made-up vendor number on WellAwake's virtual screens (VirtualScreen.swift), so they can be told
 // apart from real monitors and other apps' virtual screens.
 let wellAwakeDisplayVendor: UInt32 = 0x5741
+// Their serial numbers: the menu's virtual screen, and the stand-in for a closed lid.
+let virtualScreenSerial: UInt32 = 1
+let lidScreenSerial: UInt32 = 2
 
 struct DisplayState {
     let builtIn: Bool

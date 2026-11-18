@@ -5,6 +5,7 @@ import IOKit.pwr_mgt
 // monitors. WellAwake makes two kinds (see ScreenPlan in DisplaySleep.swift):
 // - "Virtual Screen" in the menu: 1920x1080, there while it's ticked, to run things such as Claude in
 //   Chrome or record demos on, out of the way. A replacement for BetterDisplay's virtual screens.
+//   "Watch Virtual Screen" shows it live in a window (WatchWindow.swift).
 // - The lid screen: the built-in screen's size, there while WellAwake keeps a closed Mac awake with no
 //   other monitor on.
 // With either there and the lid closed, WellAwake switches the built-in screen off, so macOS moves its
@@ -44,14 +45,14 @@ final class VirtualScreens {
         if !plan.virtualScreen {
             virtualScreen = nil
         } else if virtualScreen == nil {
-            virtualScreen = makeVirtualDisplay(name: "WellAwake", size: CGSize(width: 1920, height: 1080), serial: 1)
+            virtualScreen = makeVirtualDisplay(name: "WellAwake", size: CGSize(width: 1920, height: 1080), serial: virtualScreenSerial)
             refused.virtualScreen = virtualScreen == nil
         }
         if !plan.lidScreen {
             if !builtInComingBack { lidScreen = nil }
             lidScreenRefused = false
         } else if lidScreen == nil, !lidScreenRefused {
-            lidScreen = makeVirtualDisplay(name: "WellAwake (lid closed)", size: lidScreenSize(), serial: 2)
+            lidScreen = makeVirtualDisplay(name: "WellAwake (lid closed)", size: lidScreenSize(), serial: lidScreenSerial)
             lidScreenRefused = lidScreen == nil
             refused.lidScreen = lidScreenRefused
         }
