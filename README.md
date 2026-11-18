@@ -30,7 +30,7 @@ WellAwake keeps itself up to date. Once a day it runs `brew update` and `brew up
 
 WellAwake was called LidAwake until 2.0. A LidAwake install from 1.2.0 on moves over by itself at its next daily update: its last version installs WellAwake and starts it at login, and WellAwake then uninstalls LidAwake. Your settings come across, including the phone alert topic, so the ntfy app keeps working. LidAwake's sudo rule keeps working too, so there's no new password prompt.
 
-The tap has been renamed to `innowellteam/wellawake`. Most LidAwake installs move over during their next daily update. On Homebrew 7, if `brew update` refuses the rename with `TapRedirectNotAllowedError`, remove the old LidAwake tap and tap `innowellteam/wellawake` directly, following Homebrew's error message. If `brew` then reports that the new tap is untrusted, run `brew trust innowellteam/wellawake` once. WellAwake's updater already runs `brew trust --tap` for the tap it finds.
+The tap has been renamed to `innowellteam/wellawake`. Most LidAwake installs move over during their next daily update. On Homebrew 7, if `brew update` refuses the rename with `TapRedirectNotAllowedError`, remove the old LidAwake tap and tap `innowellteam/wellawake` directly, following Homebrew's error message. Removing the tap can uninstall LidAwake after Homebrew asks for confirmation; if it does, skip the stop and uninstall command below and run the install and start commands. If `brew` then reports that the new tap is untrusted, run `brew trust innowellteam/wellawake` once. WellAwake's updater already runs `brew trust --tap` for the tap it finds.
 
 To move over straight away, or from a version before 1.2.0:
 
