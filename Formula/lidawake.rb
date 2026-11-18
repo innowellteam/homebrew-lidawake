@@ -3,7 +3,7 @@
 # uninstalls it. Keep it while any LidAwake installs might still be around.
 class Lidawake < Formula
   desc "LidAwake's last version, which moves an install over to WellAwake"
-  homepage "https://github.com/innowellteam/homebrew-lidawake"
+  homepage "https://github.com/innowellteam/homebrew-wellawake"
   url "file://#{File.expand_path("..", __dir__)}", using: :git, tag: "v2.0.1", revision: "9c30300157772e87668acb50061ab5089f738ec2"
   license "MIT"
 
@@ -28,7 +28,7 @@ class Lidawake < Formula
     <<~EOS
       LidAwake is now WellAwake. Running as a brew service, it installs WellAwake and
       starts it by itself. Otherwise:
-        brew install innowellteam/lidawake/wellawake
+        brew install innowellteam/wellawake/wellawake
         brew services start wellawake
     EOS
   end

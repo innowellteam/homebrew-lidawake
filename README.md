@@ -18,7 +18,7 @@ While it's keeping your Mac awake, it also watches the Mac's heat and battery an
 ## Install
 
 ```sh
-brew install innowellteam/lidawake/wellawake
+brew install innowellteam/wellawake/wellawake
 brew services start wellawake   # start now and at every login
 ```
 
@@ -30,13 +30,13 @@ WellAwake keeps itself up to date. Once a day it runs `brew update` and `brew up
 
 WellAwake was called LidAwake until 2.0. A LidAwake install from 1.2.0 on moves over by itself at its next daily update: its last version installs WellAwake and starts it at login, and WellAwake then uninstalls LidAwake. Your settings come across, including the phone alert topic, so the ntfy app keeps working. LidAwake's sudo rule keeps working too, so there's no new password prompt.
 
-The tap is still called `innowellteam/lidawake`, because that's where LidAwake looks for its updates. Once nobody's on LidAwake, the repo can be renamed: brew renames its copy of the tap to match, and WellAwake and its formula find the tap wherever it is.
+The tap has been renamed to `innowellteam/wellawake`. LidAwake's move-over still works: the last LidAwake version and WellAwake find the tap by its formula, even after Homebrew renames its local copy. On Homebrew 7, if `brew` reports that the renamed tap is untrusted, run `brew trust innowellteam/wellawake` once. WellAwake's updater already runs `brew trust --tap` for its own tap.
 
 To move over straight away, or from a version before 1.2.0:
 
 ```sh
 brew services stop lidawake && brew uninstall lidawake
-brew install innowellteam/lidawake/wellawake && brew services start wellawake
+brew install innowellteam/wellawake/wellawake && brew services start wellawake
 ```
 
 `Bridge/` and `Formula/lidawake.rb` are that last LidAwake version. Leave them in place while any LidAwake installs might still be around.
@@ -99,7 +99,7 @@ sudo pmset -a disablesleep 0
 sudo rm -f /etc/sudoers.d/wellawake /etc/sudoers.d/lidawake
 brew services stop wellawake
 brew uninstall wellawake
-brew untap innowellteam/lidawake
+brew untap innowellteam/wellawake
 ```
 
 ## Build locally

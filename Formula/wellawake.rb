@@ -1,6 +1,6 @@
 class Wellawake < Formula
   desc "Menu bar toggle that keeps your Mac awake with the lid closed"
-  homepage "https://github.com/innowellteam/homebrew-lidawake"
+  homepage "https://github.com/innowellteam/homebrew-wellawake"
   # This repo is also the tap, so brew already has a clone of it: build from that. It's found from
   # this file's folder rather than by name, so it still works if the repo (and with it the tap) is renamed.
   url "file://#{File.expand_path("..", __dir__)}", using: :git, tag: "v2.2.0", revision: "52d408921ba55aa2276b1e153300f940c7ae46e1"
