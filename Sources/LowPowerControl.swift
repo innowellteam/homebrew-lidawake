@@ -28,8 +28,4 @@ extension AppDelegate {
         }
         UserDefaults.standard.set(owned.sorted(), forKey: lowPowerOwnedKey)
     }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        updateLowPowerMode(awake: false)
-    }
 }

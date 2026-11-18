@@ -9,9 +9,9 @@ Left-click the icon to toggle. Right-click (or control-click) for the menu.
 
 To stay awake for a set time, right-click and choose **Stay Awake For** 15, 30, 45 minutes or 1 hour. When the time is up WellAwake turns sleep back on, and a closed Mac goes to sleep. The menu shows how long is left. Left-click to stop early, or pick another time to restart the clock.
 
-When sleep is disabled and the lid is closed, WellAwake puts the built-in display to sleep. If an external display is connected, it leaves displays alone so you can continue using clamshell mode. To keep the screen on with the lid closed, for example to record the screen, untick "Turn Off Screen When Lid Closes" in the menu.
+When sleep is disabled and you close the lid with no monitor on, WellAwake adds a stand-in screen the size of the built-in one and switches the built-in screen off, so macOS moves your windows onto the stand-in. They keep running there, so browser automation such as Claude in Chrome keeps working. Open the lid and the built-in screen comes back and the stand-in goes. With a monitor on, WellAwake leaves screens alone so you can keep using clamshell mode. See [Screens with the lid closed](#screens-with-the-lid-closed).
 
-Tick "Virtual Screen" in the menu to add a 1920x1080 screen that exists only in software, so you don't need BetterDisplay or a dummy plug (see [Virtual screen](#virtual-screen)).
+Tick "Virtual Screen" in the menu to add a 1920x1080 screen that exists only in software, to run things such as Claude in Chrome on out of your way, so you don't need BetterDisplay or a dummy plug.
 
 While it's keeping your Mac awake, it also watches the Mac's heat and battery and alerts your phone if it runs hot or low (see [Phone alerts](#phone-alerts)).
 
@@ -125,15 +125,21 @@ To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD
 
 Brew reads the bottle from its own clone of this repo, the same way it reads the source, so neither needs a GitHub token.
 
-## Virtual screen
+## Screens with the lid closed
 
-Ticking **Virtual Screen** adds a screen called WellAwake, 1920x1080, that macOS treats as an external monitor. It's there while WellAwake is running with the option ticked, and it's off by default.
+WellAwake makes two kinds of screen that exist only in software. macOS treats them as external monitors.
 
-- Lid closed, monitor off: windows move onto the virtual screen and keep drawing, so browser automation such as Claude in Chrome keeps working. Without it there's no screen left awake, the display sleeps, the Mac locks, and Chrome stops drawing pages nobody can see. While WellAwake is keeping the Mac awake with the virtual screen on, it also holds off idle display sleep, which would lock the Mac.
-- Recording demos: it's a fixed 1080p screen to put a browser window on, out of your way. Move windows to it with the mouse, or set where it sits in System Settings > Displays (macOS remembers).
-- From a script: `defaults write org.innowell.wellawake VirtualScreen -bool true` (or `false`). WellAwake picks it up within 15 seconds.
+Virtual Screen, ticked in the menu: a 1920x1080 screen called WellAwake. It's there while WellAwake is running with the option ticked, and it's off by default.
 
-It uses the same unpublished part of macOS (CGVirtualDisplay) as BetterDisplay and DeskPad. A macOS update could change it; if it stops working, WellAwake says so and unticks the option.
+- Put a browser for Claude in Chrome, or anything else, on it, out of your way. Closing the lid doesn't affect it.
+- Recording demos: it's a fixed 1080p screen to put a browser window on. Move windows to it with the mouse, or set where it sits in System Settings > Displays (macOS remembers).
+- From a script: `defaults write org.innowell.wellawake VirtualScreen -bool true` (or `false`). WellAwake picks it up within 2 seconds.
+
+The stand-in for a closed lid: a screen the size of the built-in one, called "WellAwake (lid closed)". WellAwake adds it while it's keeping the Mac awake with the lid closed and no monitor on, unless Virtual Screen is ticked, which does the same job.
+
+With either screen there and the lid closed, WellAwake switches the built-in screen off, and macOS moves its windows onto WellAwake's screen. Without that, the built-in display would sleep, the Mac would lock, and Chrome would stop drawing pages nobody can see. While keeping the Mac awake on one of its screens, WellAwake also holds off idle display sleep, which would lock the Mac. So the Mac stays unlocked while the lid is closed. When the lid opens, WellAwake switches the built-in screen back on. It also does that when it quits, crashes or restarts.
+
+Both use unpublished parts of macOS: CGVirtualDisplay for the screens (as BetterDisplay and DeskPad do) and SkyLight's switch for turning a screen off (as Displays settings does). A macOS update could change them. If macOS refuses the Virtual Screen, WellAwake says so and unticks it. If it refuses the stand-in, WellAwake alerts your phone and puts the built-in display to sleep instead, which locks the Mac. If it refuses to switch the built-in screen off, WellAwake alerts your phone, and the windows keep running on the built-in screen behind the closed lid.
 
 ## Low Power Mode with the lid closed
 

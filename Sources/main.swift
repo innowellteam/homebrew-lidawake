@@ -26,10 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let toggleItem = NSMenuItem(title: "Stay Awake With Lid Closed", action: #selector(toggle), keyEquivalent: "")
     let timedItem = NSMenuItem(title: "Stay Awake For", action: nil, keyEquivalent: "")
     let timeLeftItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    let screenOffItem = NSMenuItem(title: "Turn Off Screen When Lid Closes", action: #selector(toggleScreenOff), keyEquivalent: "")
     let lowPowerItem = NSMenuItem(title: "Low Power Mode When Lid Closes", action: #selector(toggleLowPower), keyEquivalent: "")
     let virtualScreenItem = NSMenuItem(title: "Virtual Screen", action: #selector(toggleVirtualScreen), keyEquivalent: "")
-    let virtualScreen = VirtualScreen()
+    let virtualScreens = VirtualScreens()
+    // As of the last refresh, and whether the lid was closed at the last 2-second check.
+    var keepingAwake = false
+    var lidWasClosed = false
     let heatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sleepWhenCriticalItem = NSMenuItem(title: "Let Mac Sleep If Critically Hot", action: #selector(toggleSleepWhenCritical), keyEquivalent: "")
     let sessionLoggingItem = NSMenuItem(title: "Record Session Logs", action: #selector(toggleSessionLogging), keyEquivalent: "")
@@ -44,7 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var sessionLength: Int?
     var awakeUntil: Date?
     var sessionTimer: Timer?
-    var displaySleepMonitor: DisplaySleepMonitor?
     let sessionLog = SessionLog()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -61,15 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         adoptLidAwakeSettings()
+        // In case WellAwake stopped with the lid closed and the built-in screen switched off.
+        switchBuiltInScreenBackOn()
         startRecovery()
-        UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true, screenOffWhenLidClosedKey: true])
+        UserDefaults.standard.register(defaults: [sleepWhenCriticalKey: true])
         if UserDefaults.standard.string(forKey: ntfyURLKey) == nil {
             let topic = "wellawake-" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20)
             UserDefaults.standard.set("https://ntfy.sh/\(topic)", forKey: ntfyURLKey)
         }
 
         toggleItem.target = self
-        screenOffItem.target = self
         lowPowerItem.target = self
         virtualScreenItem.target = self
         sleepWhenCriticalItem.target = self
@@ -91,7 +93,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggleItem)
         menu.addItem(timedItem)
         menu.addItem(timeLeftItem)
-        menu.addItem(screenOffItem)
         menu.addItem(lowPowerItem)
         menu.addItem(virtualScreenItem)
         menu.addItem(.separator())
@@ -122,7 +123,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self.warnLowBattery() }
         }
         checkHeat()
-        displaySleepMonitor = DisplaySleepMonitor()
+        RunLoop.main.add(Timer(timeInterval: 2, repeats: true) { _ in
+            MainActor.assumeIsolated { self.checkLid() }
+        }, forMode: .common)
         // Pick up changes made outside the app, e.g. pmset run in a terminal.
         Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
             MainActor.assumeIsolated {
@@ -144,6 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 await MainActor.run { self.checkingForUpdate = false }
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        updateLowPowerMode(awake: false)
+        switchBuiltInScreenBackOn()
     }
 
     func startRecovery() {
@@ -200,11 +208,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func toggle() {
         setAwake(!sleepDisabled(), minutes: nil)
-    }
-
-    @objc func toggleScreenOff() {
-        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey), forKey: screenOffWhenLidClosedKey)
-        refresh()
     }
 
     @objc func toggleSleepWhenCritical() {
@@ -387,12 +390,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ? "Staying awake with the lid closed. Click to allow sleep."
             : "Sleeping normally. Click to stay awake with the lid closed."
         updateLowPowerMode(awake: awake)
-        updateVirtualScreen(awake: awake)
+        keepingAwake = awake
+        let lidClosed = lidIsClosed()
+        if !lidClosed { _ = builtInScreenSize() }
+        updateScreens(awake: awake, lidClosed: lidClosed)
         let logging = UserDefaults.standard.bool(forKey: sessionLoggingKey)
         sessionLoggingItem.state = logging ? .on : .off
         logSessionEvent("sample", awake: awake)
         toggleItem.state = awake ? .on : .off
-        screenOffItem.state = UserDefaults.standard.bool(forKey: screenOffWhenLidClosedKey) ? .on : .off
         lowPowerItem.state = UserDefaults.standard.bool(forKey: lowPowerWhenLidClosedKey) ? .on : .off
         virtualScreenItem.state = UserDefaults.standard.bool(forKey: virtualScreenKey) ? .on : .off
         heatItem.title = "Heat: \(ProcessInfo.processInfo.thermalState.label)"

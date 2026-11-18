@@ -50,16 +50,21 @@ func trySetSleepDisabled(_ disabled: Bool) -> Bool {
 
 // Turning sleep back on doesn't put an already-closed Mac to sleep: macOS only reacts to the lid
 // closing, and idle sleep is blocked by anything holding a sleep assertion (caffeinate, say).
-// An external display means clamshell use, so that case is left alone.
+// An external display means clamshell use, so that case is left alone. WellAwake's own virtual
+// screens don't count: they're only there to keep windows drawing while it keeps the Mac awake.
 func sleepNowIfLidClosed() {
-    guard lidIsClosed(), !(onlineDisplayStates() ?? []).contains(where: { !$0.builtIn }) else { return }
+    guard lidIsClosed(), !(onlineDisplayStates() ?? []).contains(where: { !$0.builtIn && !$0.wellAwake }) else { return }
     _ = run("/usr/bin/pmset", ["sleepnow"])
 }
 
-// The worker's command: after restoring sleep, make sure a closed Mac actually sleeps.
+// The worker's command: after restoring sleep, give the Mac its screen back and make sure a closed
+// Mac actually sleeps.
 func recoveryCommandThenSleep(_ awake: Bool) -> Bool {
     guard recoveryCommand(awake) else { return false }
-    if !awake { sleepNowIfLidClosed() }
+    if !awake {
+        switchBuiltInScreenBackOn()
+        sleepNowIfLidClosed()
+    }
     return true
 }
 
