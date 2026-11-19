@@ -46,8 +46,8 @@ final class WindowRecovery {
                     guard let identity = windowIdentity(window, position: position, size: size, in: listedWindows),
                           !existing.contains(identity) else { continue }
                 }
-                let x = min(max(destination.midX - size.width / 2, destination.minX), destination.maxX - size.width)
-                let y = min(max(destination.midY - size.height / 2, destination.minY), destination.maxY - size.height)
+                let x = min(max(destination.midX - size.width / 2, destination.minX), max(destination.minX, destination.maxX - size.width))
+                let y = min(max(destination.midY - size.height / 2, destination.minY), max(destination.minY, destination.maxY - size.height))
                 var point = CGPoint(x: x, y: y)
                 guard let axPosition = AXValueCreate(.cgPoint, &point) else { continue }
                 let error = AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, axPosition)
@@ -85,12 +85,17 @@ final class WindowRecovery {
         guard AXUIElementGetPid(window, &processID) == .success,
               processID != getpid() else { return nil }
         let frame = CGRect(origin: position, size: size)
-        return listedWindows.first { info in
+        let matches = listedWindows.compactMap { info -> WindowIdentity? in
             guard let identity = identity(from: info), identity.processID == processID,
-                  let bounds = bounds(from: info) else { return false }
-            return abs(bounds.origin.x - frame.origin.x) <= 2 && abs(bounds.origin.y - frame.origin.y) <= 2 &&
-                abs(bounds.width - frame.width) <= 2 && abs(bounds.height - frame.height) <= 2
-        }.flatMap(identity(from:))
+                  let bounds = bounds(from: info),
+                  abs(bounds.origin.x - frame.origin.x) <= 2, abs(bounds.origin.y - frame.origin.y) <= 2,
+                  abs(bounds.width - frame.width) <= 2, abs(bounds.height - frame.height) <= 2 else { return nil }
+            return identity
+        }
+        // If identical frames make the Accessibility element ambiguous, leave it alone during
+        // automatic recovery. Manual recovery doesn't use this mapping.
+        guard matches.count == 1 else { return nil }
+        return matches[0]
     }
 
     private func windowPosition(_ window: AXUIElement) -> CGPoint? {
