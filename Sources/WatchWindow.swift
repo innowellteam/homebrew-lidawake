@@ -15,6 +15,7 @@ func virtualScreenDisplay() -> CGDirectDisplayID? {
 final class ScreenWatcher: NSObject, NSWindowDelegate, SCStreamOutput, SCStreamDelegate {
     private var window: NSWindow?
     private var stream: SCStream?
+    private var captureTask: Task<Void, Never>?
     // The screen being shown, from the menu click until the window closes.
     private var watching: CGDirectDisplayID?
     // Counts the clicks that started a stream, so a start still in flight from a window closed and
@@ -33,7 +34,7 @@ final class ScreenWatcher: NSObject, NSWindowDelegate, SCStreamOutput, SCStreamD
         watching = display
         starts += 1
         let attempt = starts
-        Task { await start(display, attempt: attempt) }
+        captureTask = Task { await start(display, attempt: attempt) }
     }
 
     // Every 2 seconds, and when the screens change: the virtual screen went away, or the window is on it.
@@ -72,17 +73,29 @@ final class ScreenWatcher: NSObject, NSWindowDelegate, SCStreamOutput, SCStreamD
             let configuration = SCStreamConfiguration()
             configuration.width = screen.width
             configuration.height = screen.height
-            // macOS only sends a frame when the picture changes, and no more often than this.
-            configuration.minimumFrameInterval = CMTime(value: 1, timescale: 15)
-            configuration.queueDepth = 3
-            let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .main)
-            try await stream.startCapture()
-            guard isCurrent(attempt) else {
-                try? await stream.stopCapture()
-                return
+            if #available(macOS 14.0, *) {
+                // On macOS 26, SCStream returns the first real display when its filter targets a
+                // CGVirtualDisplay. The one-shot screenshot API honors the display filter, so take
+                // successive screenshots to keep this view live.
+                while isCurrent(attempt), !Task.isCancelled {
+                    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+                    guard isCurrent(attempt), !Task.isCancelled else { return }
+                    window?.contentView?.layer?.contents = image
+                    try? await Task.sleep(nanoseconds: 66_666_667)
+                }
+            } else {
+                // macOS only sends a frame when the picture changes, and no more often than this.
+                configuration.minimumFrameInterval = CMTime(value: 1, timescale: 15)
+                configuration.queueDepth = 3
+                let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
+                try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .main)
+                try await stream.startCapture()
+                guard isCurrent(attempt) else {
+                    try? await stream.stopCapture()
+                    return
+                }
+                self.stream = stream
             }
-            self.stream = stream
         } catch {
             guard isCurrent(attempt) else { return }
             window!.close()
@@ -116,6 +129,8 @@ final class ScreenWatcher: NSObject, NSWindowDelegate, SCStreamOutput, SCStreamD
 
     func windowWillClose(_ notification: Notification) {
         watching = nil
+        captureTask?.cancel()
+        captureTask = nil
         window?.contentView?.layer?.contents = nil
         guard let stream else { return }
         self.stream = nil
