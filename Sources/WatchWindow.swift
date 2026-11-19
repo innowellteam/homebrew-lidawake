@@ -170,7 +170,8 @@ extension AppDelegate: NSMenuItemValidation {
 
     // Greyed out while the virtual screen is off.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem !== watchScreenItem || virtualScreenDisplay() != nil
+        if menuItem === watchScreenItem || menuItem === bringWindowsBackItem { return virtualScreenDisplay() != nil }
+        return true
     }
 
     func askForScreenRecording() {
@@ -184,5 +185,16 @@ extension AppDelegate: NSMenuItemValidation {
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+    }
+
+    func askForAccessibility() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "WellAwake needs Accessibility permission to move windows"
+        alert.informativeText = "Turn on WellAwake under Accessibility in System Settings > Privacy & Security, then choose Bring Windows Back or reconnect a monitor again."
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 }

@@ -14,6 +14,10 @@ extension AppDelegate {
         alert.runModal()
     }
 
+    @objc func bringWindowsBack() {
+        windowRecovery.bringAllWindowsBack()
+    }
+
     // Every 2 seconds, so a closed lid gets its screen before the built-in screen could sleep and lock the Mac.
     func checkLid() {
         let closed = lidIsClosed()
@@ -29,6 +33,16 @@ extension AppDelegate {
     @discardableResult
     func updateScreens(awake: Bool, lidClosed: Bool) -> Bool {
         let displays = onlineDisplayStates() ?? []
+        let realMonitorIDs = Set(displays.filter { !$0.builtIn && !$0.wellAwake }.map(\.id))
+        if let lastRealMonitorIDs, lastRealMonitorIDs != realMonitorIDs {
+            let existingWindows = windowsOnVirtualBeforeRealChange
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 750_000_000)
+                windowRecovery.bringNewWindowsBack(excluding: existingWindows)
+            }
+        }
+        lastRealMonitorIDs = realMonitorIDs
+        windowsOnVirtualBeforeRealChange = windowRecovery.windowsOnVirtualScreen()
         let plan = screenPlan(virtualScreenTicked: UserDefaults.standard.bool(forKey: virtualScreenKey), keepingAwake: awake, lidClosed: lidClosed,
                               otherMonitor: displays.contains { !$0.builtIn && !$0.wellAwake })
         let refused = virtualScreens.apply(plan, displays: displays, lidScreenSize: builtInScreenSize)
