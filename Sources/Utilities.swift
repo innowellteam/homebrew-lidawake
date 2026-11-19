@@ -47,7 +47,7 @@ func upgradeThroughBrew(_ prefix: String) -> Bool {
     return true
 }
 
-// The tap ("user/repo") whose Formula folder has this formula, e.g. "innowellteam/lidawake". Taps live
+// The tap ("user/repo") whose Formula folder has this formula, e.g. "innowellteam/wellawake". Taps live
 // in the Homebrew repository: the prefix itself on Apple Silicon, <prefix>/Homebrew on Intel.
 func brewTap(_ prefix: String, containing formula: String) -> String? {
     let files = FileManager.default
