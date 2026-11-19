@@ -2,6 +2,9 @@ PREFIX ?= /usr/local
 APP := build/WellAwake.app
 VERSION := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
 BOTTLE := bottles/wellawake-$(VERSION).all.bottle.tar.gz
+# Ad hoc unless a release passes a real identity. macOS ties privacy grants such as Screen Recording
+# to the signature: ad hoc makes every build a new app, so the grant is lost on each update.
+SIGN_IDENTITY ?= -
 
 .PHONY: all install bottle bridge-bottle clean test
 
@@ -16,7 +19,7 @@ $(APP): $(wildcard Sources/*.swift) Sources/CGVirtualDisplay.h Resources/Info.pl
 	lipo -create -output $@/Contents/MacOS/WellAwake build/arch/arm64 build/arch/x86_64
 	cp Resources/Info.plist $@/Contents/
 	cp Resources/*.png $@/Contents/Resources/
-	codesign --force --sign - $@
+	codesign --force --sign "$(SIGN_IDENTITY)" $@
 
 install: $(APP)
 	mkdir -p $(PREFIX)

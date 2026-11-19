@@ -28,7 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let timeLeftItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let lowPowerItem = NSMenuItem(title: "Low Power Mode When Lid Closes", action: #selector(toggleLowPower), keyEquivalent: "")
     let virtualScreenItem = NSMenuItem(title: "Virtual Screen", action: #selector(toggleVirtualScreen), keyEquivalent: "")
+    let watchScreenItem = NSMenuItem(title: "Watch Virtual Screen", action: #selector(watchVirtualScreen), keyEquivalent: "")
     let virtualScreens = VirtualScreens()
+    let screenWatcher = ScreenWatcher()
     // As of the last refresh, and whether the lid was closed at the last 2-second check.
     var keepingAwake = false
     var lidWasClosed = false
@@ -74,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.target = self
         lowPowerItem.target = self
         virtualScreenItem.target = self
+        watchScreenItem.target = self
         sleepWhenCriticalItem.target = self
         removeRuleItem.target = self
         sessionLoggingItem.target = self
@@ -95,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(timeLeftItem)
         menu.addItem(lowPowerItem)
         menu.addItem(virtualScreenItem)
+        menu.addItem(watchScreenItem)
         menu.addItem(.separator())
         menu.addItem(heatItem)
         menu.addItem(sleepWhenCriticalItem)

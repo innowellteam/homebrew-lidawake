@@ -57,6 +57,7 @@ extension AppDelegate {
                 if result.status != 0 { NSLog("WellAwake: display sleep failed: \(result.output)") }
             }
         }
+        screenWatcher.check(virtualScreen: virtualScreenDisplay())
         return refused.virtualScreen
     }
 }

@@ -11,7 +11,7 @@ To stay awake for a set time, right-click and choose **Stay Awake For** 15, 30, 
 
 When sleep is disabled and you close the lid with no monitor on, WellAwake adds a stand-in screen the size of the built-in one and switches the built-in screen off, so macOS moves your windows onto the stand-in. They keep running there, so browser automation such as Claude in Chrome keeps working. Open the lid and the built-in screen comes back and the stand-in goes. With a monitor on, WellAwake leaves screens alone so you can keep using clamshell mode. See [Screens with the lid closed](#screens-with-the-lid-closed).
 
-Tick "Virtual Screen" in the menu to add a 1920x1080 screen that exists only in software, to run things such as Claude in Chrome on out of your way, so you don't need BetterDisplay or a dummy plug.
+Tick "Virtual Screen" in the menu to add a 1920x1080 screen that exists only in software, to run things such as Claude in Chrome on out of your way, so you don't need BetterDisplay or a dummy plug. Choose "Watch Virtual Screen" to open a window that shows it live, so you can see what an agent is doing there.
 
 While it's keeping your Mac awake, it also watches the Mac's heat and battery and alerts your phone if it runs hot or low (see [Phone alerts](#phone-alerts)).
 
@@ -118,7 +118,7 @@ To try whatever is on `main` through brew: `brew update && brew reinstall --HEAD
 ## Release a new version
 
 1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, commit, then `git tag vX.Y.Z`.
-2. `make clean bottle` builds the app and replaces the WellAwake bottle in `bottles/` with the new one, printing its sha256.
+2. `make clean bottle` builds the app and replaces the WellAwake bottle in `bottles/` with the new one, printing its sha256. Add `SIGN_IDENTITY="<identity>"` to sign with a code signing certificate from the keychain instead of ad hoc. macOS keeps a Screen Recording grant across updates only when every release is signed with the same identity; with ad hoc signing, users switch WellAwake off and on again under Screen Recording after each update.
 3. In `Formula/wellawake.rb`, set `tag:` to `vX.Y.Z`, `revision:` to the output of `git rev-parse vX.Y.Z^{}`, and the bottle `sha256` to the one `make` printed.
 4. Commit the formula and `bottles/`, then `git push origin main vX.Y.Z`.
 5. `brew update && brew upgrade wellawake && brew services restart wellawake`
@@ -134,6 +134,7 @@ Virtual Screen, ticked in the menu: a 1920x1080 screen called WellAwake. It's th
 - Put a browser for Claude in Chrome, or anything else, on it, out of your way. Closing the lid doesn't affect it.
 - Recording demos: it's a fixed 1080p screen to put a browser window on. Move windows to it with the mouse, or set where it sits in System Settings > Displays (macOS remembers).
 - From a script: `defaults write org.innowell.wellawake VirtualScreen -bool true` (or `false`). WellAwake picks it up within 2 seconds.
+- Watching it: "Watch Virtual Screen" opens a window on one of your real screens that shows the virtual screen live, pointer included. It's view only: clicks and keys in it don't reach the virtual screen. It needs Screen Recording permission (System Settings > Privacy & Security > Screen & System Audio Recording), and WellAwake asks the first time. While the window is open, macOS shows its recording indicator in the menu bar. macOS asks again from time to time, and after an update if the release isn't signed with a stable identity. The item is greyed out while the virtual screen is off, and the window closes when the screen goes.
 
 The stand-in for a closed lid: a screen the size of the built-in one, called "WellAwake (lid closed)". WellAwake adds it while it's keeping the Mac awake with the lid closed and no monitor on, unless Virtual Screen is ticked, which does the same job.
 
